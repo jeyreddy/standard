@@ -484,6 +484,31 @@
       }
     }
 
+    // ── Pattern 2b: inverse verbs "A receives-from/is-fed-by B" → B→A ────────
+    // A is the destination (sink-pinned); B is the source.
+    // Covers: "V-201 receives flow from pump P-101"
+    //         "reactor is fed by pump P-101"
+    //         "V-201 takes feed from P-101"
+    // Up to 3 optional words are allowed between the flow keyword and A;
+    // up to 2 optional words are allowed between the preposition/verb and B —
+    // this handles descriptor words like "pump" in "from pump P-101".
+    const OPT2 = '(?:[\\w][\\w-]*\\s+){0,2}';  // 0-2 optional descriptor words
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        // "A receives [words] from [words] B"
+        if (new RegExp('\\b' + ar + '\\s+(?:receives|takes)\\s+(?:[\\w]+\\s+){0,3}from\\s+' + OPT2 + br + '\\b').test(lower)) {
+          addPair(nodes[j].id, nodes[i].id, true);
+        }
+        // "A is fed by/from [words] B"
+        if (new RegExp('\\b' + ar + '\\s+is\\s+fed\\s+(?:by|from)\\s+' + OPT2 + br + '\\b').test(lower)) {
+          addPair(nodes[j].id, nodes[i].id, true);
+        }
+      }
+    }
+
     // ── Pattern 3: positional keywords ──────────────────────────────────────
     // "upstream of" / "downstream of" explicitly name the endpoint so pinSink=true.
     // "before" / "after" are softer constraints — no sink pinning.
@@ -824,6 +849,105 @@ ${nodeSvg}
     return lines.slice(0, 2); // max 2 lines in node box
   }
 
+  // ─── SYNC RENDER (shared by render and renderAsync) ───────────────────────
+
+  function _render(input) {
+    const str   = String(input || '').trim();
+    const isYml = /^schema_version:|^---/.test(str);
+    const doc   = isYml ? fromYaml(str) : parse(str);
+    return { doc, yaml: toYaml(doc), svg: toSvg(doc), text: toText(doc) };
+  }
+
+  // ─── LLM FALLBACK (Tier 3) ─────────────────────────────────────────────────
+  // Used by renderAsync when Tier 1 returns confidence 'low' or 'none'.
+  //
+  // Supported providers:
+  //   { provider: 'ollama', model: 'llama3.2:1b', url: 'http://localhost:11434' }
+  //   { provider: 'haiku',  model: 'claude-haiku-4-5-20251001', apiKey: 'sk-ant-...' }
+  //
+  // Both require the fetch API (Node.js 18+ or browser).
+
+  const _LLM_PROMPT = [
+    'You are a process engineering assistant.',
+    'Extract equipment nodes and flow connections from the text and return a YMPL 1.0 YAML document.',
+    'Return ONLY the YAML — no explanation, no markdown code fences.',
+    '',
+    'YMPL 1.0 schema:',
+    '  schema_version: ympl-1.0',
+    '  id: <slug, lowercase_underscores>',
+    '  title: <human readable title>',
+    '  nodes:',
+    '    - id: n1',
+    '      label: <name or ISA tag e.g. P-101, CV-101, V-201, E-101, K-101>',
+    '      kind: <vessel|pump|valve|checkvalve|heat_exchanger|compressor|column|reactor|relief|filter|meter>',
+    '  edges:',
+    '    - from: n1',
+    '      to: n2',
+    '      kind: stream   # stream (default) | bypass | recycle',
+    '      label: <optional e.g. Bypass>',
+    '  meta:',
+    '    confidence: <high (3+ nodes) | medium (2) | low (1) | none (0)>',
+    '',
+    'Rules:',
+    '  - List nodes in flow order, upstream first.',
+    '  - Use ISA tag IDs as labels where present.',
+    '  - Add all flow connections as edges; use bypass for parallel paths, recycle for return paths.',
+    '',
+    'Text:',
+    '',
+  ].join('\n');
+
+  async function _callOllama(text, cfg) {
+    const base  = (cfg.url  || 'http://localhost:11434').replace(/\/$/, '');
+    const model = cfg.model || 'llama3.2:1b';
+    const res = await fetch(base + '/api/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model, prompt: _LLM_PROMPT + text, stream: false }),
+    });
+    if (!res.ok) throw new Error('Ollama HTTP ' + res.status);
+    const data = await res.json();
+    return data.response || '';
+  }
+
+  async function _callHaiku(text, cfg) {
+    if (!cfg.apiKey) throw new Error('haiku provider requires apiKey');
+    const model = cfg.model || 'claude-haiku-4-5-20251001';
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:  'POST',
+      headers: {
+        'Content-Type':      'application/json',
+        'x-api-key':         cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: _LLM_PROMPT + text }],
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error('Haiku HTTP ' + res.status + ': ' + err.slice(0, 200));
+    }
+    const data = await res.json();
+    return (data.content && data.content[0] && data.content[0].text) || '';
+  }
+
+  async function _llmExtract(text, cfg) {
+    try {
+      let raw;
+      if      (cfg.provider === 'ollama') raw = await _callOllama(text, cfg);
+      else if (cfg.provider === 'haiku')  raw = await _callHaiku(text, cfg);
+      else return null;
+      // Strip markdown fences if the LLM added them
+      raw = raw.trim().replace(/^```(?:yaml)?\s*/i, '').replace(/\s*```$/, '').trim();
+      return raw || null;
+    } catch (_) {
+      return null;  // network error, bad key, etc. — degrade gracefully
+    }
+  }
+
   // ─── PUBLIC API ────────────────────────────────────────────────────────────
 
   return {
@@ -845,20 +969,38 @@ ${nodeSvg}
     toSvg,
 
     /**
-     * Main entry point — bidirectional.
-     * input: messy text string  OR  yaml string starting with 'schema_version:'
+     * Sync render — no LLM fallback.
+     * input: messy text string OR yaml string starting with 'schema_version:'
      * returns: { doc, yaml, svg, text }
      */
-    render(input) {
-      const str   = String(input || '').trim();
-      const isYml = /^schema_version:|^---/.test(str);
-      const doc   = isYml ? fromYaml(str) : parse(str);
-      return {
-        doc,
-        yaml: toYaml(doc),
-        svg:  toSvg(doc),
-        text: toText(doc),
-      };
+    render: _render,
+
+    /**
+     * Async render with optional LLM fallback (Tier 3).
+     * Falls back to LLM only when Tier 1 returns confidence 'low' or 'none'.
+     *
+     * options.llm — one of:
+     *   { provider: 'ollama', model: 'llama3.2:1b', url: 'http://localhost:11434' }
+     *   { provider: 'haiku',  model: 'claude-haiku-4-5-20251001', apiKey: 'sk-ant-...' }
+     *
+     * Requires fetch API (Node.js 18+ or browser).
+     * Returns same shape as render(): { doc, yaml, svg, text }
+     */
+    async renderAsync(input, options) {
+      const result = _render(input);
+      if (!options || !options.llm) return result;
+
+      const conf = result.doc.meta && result.doc.meta.confidence;
+      if (conf !== 'low' && conf !== 'none') return result;  // Tier 1 was sufficient
+
+      const rawYaml = await _llmExtract(String(input || '').trim(), options.llm);
+      if (!rawYaml) return result;  // LLM failed — return Tier 1 result unchanged
+
+      try {
+        return _render(rawYaml);
+      } catch (_) {
+        return result;  // LLM returned invalid YAML — degrade to Tier 1
+      }
     },
   };
 });

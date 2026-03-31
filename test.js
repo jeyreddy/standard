@@ -216,6 +216,31 @@ console.log('\n── Relation extraction (Tier 1) ─────────�
   check('upstream: V-201 is last', r.doc.nodes[2].label, 'V-201');
 }
 
+// 15. Inverse verb "A receives from B" → B is source, A is sink
+{
+  const r = YMPL.render('separator V-201 receives flow from pump P-101 via valve CV-101');
+  check('inverse-verb: 3 nodes',       r.doc.nodes.length, 3);
+  check('inverse-verb: P-101 first',   r.doc.nodes[0].label, 'P-101');
+  check('inverse-verb: V-201 last',    r.doc.nodes[2].label, 'V-201');
+}
+
+// 16. Inverse verb "A is fed by B"
+{
+  const r = YMPL.render('reactor R-101 is fed by pump P-101 through valve CV-101');
+  check('is-fed-by: R-101 is sink',    r.doc.nodes[r.doc.nodes.length - 1].label, 'R-101');
+  check('is-fed-by: P-101 is source',  r.doc.nodes[0].label, 'P-101');
+}
+
+// 17. renderAsync — no LLM config → returns same as render()
+{
+  (async () => {
+    const sync  = YMPL.render('flash drum to trim cooler to product tank');
+    const async_ = await YMPL.renderAsync('flash drum to trim cooler to product tank');
+    check('renderAsync: same node count',  async_.doc.nodes.length, sync.doc.nodes.length);
+    check('renderAsync: same text output', async_.text, sync.text);
+  })().catch(e => { console.log('  FAIL  renderAsync threw: ' + e.message); fail++; });
+}
+
 console.log('\n── No dependency on old SDK files ────────────────────────────');
 
 // 12. Confirm old SDK modules are NOT loaded
