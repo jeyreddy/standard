@@ -73,6 +73,7 @@
       'process vessel', 'closed vessel', 'pressure container',
       'ko drum', 'flash drum', 'surge drum',
       'deaerator', 'accumulator', 'receiver', 'separator',
+      'gas cylinder', 'cylinder',
       'drum', 'vessel', 'tank', 'sump', 'boot',
     ],
     column: [
@@ -298,35 +299,46 @@
         if (end > len) continue;
         if (lower.slice(i, end) !== term) continue;
 
-        // Word-boundary check
-        const pre  = i === 0        || /[\s,;.()\-\/]/.test(lower[i - 1]);
-        const post = end >= len     || /[\s,;.()\-\/]/.test(lower[end]);
+        // Word-boundary check — also accept optional plural 's'
+        const pre  = i === 0 || /[\s,;.()\-\/]/.test(lower[i - 1]);
+        // Allow a trailing 's' (plural) if followed by a real boundary
+        let endConsumed = end;
+        if (end < len && lower[end] === 's' &&
+            (end + 1 >= len || /[\s,;.()\-\/]/.test(lower[end + 1]))) {
+          endConsumed = end + 1;
+        }
+        const post = endConsumed >= len || /[\s,;.()\-\/]/.test(lower[endConsumed]);
         if (!pre || !post) continue;
 
         // No overlap with already-consumed chars
         let overlap = false;
-        for (let j = i; j < end; j++) { if (used[j]) { overlap = true; break; } }
+        for (let j = i; j < endConsumed; j++) { if (used[j]) { overlap = true; break; } }
         if (overlap) continue;
 
-        // Mark term chars consumed
-        for (let j = i; j < end; j++) used[j] = 1;
+        // Mark term chars consumed (including plural 's' if present)
+        for (let j = i; j < endConsumed; j++) used[j] = 1;
 
-        // Look for a trailing ISA tag or number to use as the label
+        // Look for a trailing ISA tag, number, or single-letter identifier (e.g. "cylinder a")
         let label = titleCase(term);
-        let scanEnd = end;
+        let scanEnd = endConsumed;
 
-        const afterSlice = text.slice(end);
-        const tagM = afterSlice.match(/^\s+([A-Za-z]{1,3}-\d{3,4}[A-Za-z]?)\b/);
-        const numM = afterSlice.match(/^\s+(\d+[A-Za-z]?)\b/);
+        const afterSlice = text.slice(endConsumed);
+        const tagM    = afterSlice.match(/^\s+([A-Za-z]{1,3}-\d{3,4}[A-Za-z]?)\b/);
+        const numM    = afterSlice.match(/^\s+(\d+[A-Za-z]?)\b/);
+        const letterM = afterSlice.match(/^\s+([A-Za-z])\b/);
 
         if (tagM) {
           label   = tagM[1].toUpperCase();
-          scanEnd = end + tagM[0].length;
-          for (let j = end; j < scanEnd; j++) used[j] = 1;
-        } else if (numM && /^(tank|vessel|drum|pump|column|reactor|compressor|filter)$/i.test(term)) {
+          scanEnd = endConsumed + tagM[0].length;
+          for (let j = endConsumed; j < scanEnd; j++) used[j] = 1;
+        } else if (numM && /^(tank|vessel|drum|pump|column|reactor|compressor|filter|cylinder)$/i.test(term)) {
           label   = titleCase(term) + ' ' + numM[1];
-          scanEnd = end + numM[0].length;
-          for (let j = end; j < scanEnd; j++) used[j] = 1;
+          scanEnd = endConsumed + numM[0].length;
+          for (let j = endConsumed; j < scanEnd; j++) used[j] = 1;
+        } else if (letterM && /^(tank|vessel|drum|pump|column|reactor|compressor|filter|cylinder|separator|exchanger)$/i.test(term)) {
+          label   = titleCase(term) + ' ' + letterM[1].toUpperCase();
+          scanEnd = endConsumed + letterM[0].length;
+          for (let j = endConsumed; j < scanEnd; j++) used[j] = 1;
         }
 
         found.push({ label, kind, start: i });
@@ -411,12 +423,138 @@
     return nl === ss || nl.includes(ss) || ss.includes(nl);
   }
 
+  // ─── RELATION EXTRACTION & NODE REORDERING ─────────────────────────────────
+  // Reads directed-flow signals from text so that node order reflects actual
+  // process flow, not just the order words happen to appear in the sentence.
+  //
+  // Patterns detected:
+  //   "from A to B"              — A is source, B is sink (endpoint)
+  //   "A feeds/flows to/pumps to B"  — directed pair A → B
+  //   "A upstream of B"          — A before B
+  //   "A downstream of B"        — B before A
+  //   "A before B / A after B"   — ordering constraint
+  //
+  // Algorithm: build a directed graph of pairs, topologically sort (Kahn's),
+  // break ties by original text order. Sink-pinned nodes (explicit "to B"
+  // endpoints) are deferred to the end of available candidates.
+
+  function escRe(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function reorderNodes(nodes, text) {
+    if (nodes.length < 2) return nodes;
+    const lower    = text.toLowerCase();
+    const dirPairs = [];
+    const sinkPins = new Set(); // candidates for chain endpoint (to be confirmed as trueSinks)
+    const seenKey  = new Set();
+
+    function addPair(fromId, toId, pinSink) {
+      const key = fromId + '>' + toId;
+      if (!seenKey.has(key)) { seenKey.add(key); dirPairs.push({ from: fromId, to: toId }); }
+      if (pinSink) sinkPins.add(toId);
+    }
+
+    // ── Pattern 1: "from A … to B" ──────────────────────────────────────────
+    // Handles: "from X to Y", "gas moved from X to Y", "from X to Y with Z in between"
+    // B is pinned as the declared chain endpoint.
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        if (new RegExp('\\bfrom\\s+' + ar + '\\b[^.]*?\\bto\\s+' + br + '\\b').test(lower)) {
+          addPair(nodes[i].id, nodes[j].id, true);
+        }
+      }
+    }
+
+    // ── Pattern 2: flow-verb pairs "A feeds/flows-to/pumps-to/… B" ──────────
+    // Establishes A before B; B is NOT pinned as sink (it may be an intermediate).
+    const FLOW_VERBS =
+      'feeds?|(?:flows?|pumps?|leads?|routes?|delivers?|sends?|discharges?|pushes?)(?:\\s+(?:to|into))';
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        if (new RegExp('\\b' + ar + '\\s+(?:' + FLOW_VERBS + ')\\s+' + br + '\\b').test(lower)) {
+          addPair(nodes[i].id, nodes[j].id, false);
+        }
+      }
+    }
+
+    // ── Pattern 3: positional keywords ──────────────────────────────────────
+    // "upstream of" / "downstream of" explicitly name the endpoint so pinSink=true.
+    // "before" / "after" are softer constraints — no sink pinning.
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = i + 1; j < nodes.length; j++) {
+        const br = escRe(nodes[j].label.toLowerCase());
+        if (new RegExp('\\b' + ar + '\\s+upstream\\s+of\\s+'   + br + '\\b').test(lower)) addPair(nodes[i].id, nodes[j].id, true);
+        if (new RegExp('\\b' + ar + '\\s+downstream\\s+of\\s+' + br + '\\b').test(lower)) addPair(nodes[j].id, nodes[i].id, true);
+        if (new RegExp('\\b' + ar + '\\s+before\\s+'           + br + '\\b').test(lower)) addPair(nodes[i].id, nodes[j].id, false);
+        if (new RegExp('\\b' + ar + '\\s+after\\s+'            + br + '\\b').test(lower)) addPair(nodes[j].id, nodes[i].id, false);
+      }
+    }
+
+    if (dirPairs.length === 0) return nodes;   // no relations found — keep text order
+
+    // trueSinks: sink-pinned nodes that have no outgoing pairs (real chain endpoints).
+    // This avoids deferring intermediate nodes that happen to be targets of a relation.
+    const hasOutgoing = new Set(dirPairs.map(p => p.from));
+    const trueSinks   = new Set([...sinkPins].filter(id => !hasOutgoing.has(id)));
+
+    // ── Kahn's topological sort ──────────────────────────────────────────────
+    const adj   = new Map(nodes.map(n => [n.id, []]));
+    const inDeg = new Map(nodes.map(n => [n.id, 0]));
+    for (const { from, to } of dirPairs) {
+      if (!adj.has(from) || !adj.has(to)) continue;
+      adj.get(from).push(to);
+      inDeg.set(to, inDeg.get(to) + 1);
+    }
+
+    const byId  = new Map(nodes.map(n => [n.id, n]));
+    const order = [];
+    let   avail = nodes.filter(n => inDeg.get(n.id) === 0);
+
+    while (avail.length > 0) {
+      // Tie-break: defer trueSink nodes to the end; otherwise keep original text order.
+      avail.sort((a, b) => {
+        const aS = trueSinks.has(a.id) ? 1 : 0;
+        const bS = trueSinks.has(b.id) ? 1 : 0;
+        if (aS !== bS) return aS - bS;
+        return nodes.indexOf(a) - nodes.indexOf(b);
+      });
+
+      const curr = avail.shift();
+      order.push(curr.id);
+      for (const nextId of adj.get(curr.id)) {
+        const deg = inDeg.get(nextId) - 1;
+        inDeg.set(nextId, deg);
+        if (deg === 0) avail.push(byId.get(nextId));
+      }
+    }
+
+    // Append any remaining (cycles / disconnected) in original text order
+    const visited = new Set(order);
+    for (const n of nodes) { if (!visited.has(n.id)) order.push(n.id); }
+
+    return order.map(id => byId.get(id));
+  }
+
   // ─── PARSE ─────────────────────────────────────────────────────────────────
 
   function parse(text) {
     const sourceText  = String(text || '').trim();
     const normalized  = normalize(sourceText);
-    const nodes       = extractNodes(normalized);
+    let   nodes       = extractNodes(normalized);
+
+    // Reorder nodes so flow order matches actual process direction
+    nodes = reorderNodes(nodes, normalized);
+    // Reassign sequential IDs after reordering (n1 = first in flow, etc.)
+    nodes = nodes.map((n, idx) => ({ id: 'n' + (idx + 1), label: n.label, kind: n.kind }));
+
     const edges       = buildEdges(nodes, normalized);
 
     const confidence  = nodes.length >= 3 ? 'high'

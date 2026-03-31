@@ -190,6 +190,32 @@ meta:
   checkIncludes('yaml recycle: text has recycle', r.text, 'Recycle');
 }
 
+console.log('\n── Relation extraction (Tier 1) ──────────────────────────────');
+
+// 12. "from X to Y with Z in between" — sink deferred to end
+{
+  const r = YMPL.render('gas moved from cylinder a to cylinder b with a reactor and check valves in between. there is a bypass around the reactor as well.');
+  check('from/to: 4 nodes found',            r.doc.nodes.length, 4);
+  check('from/to: cylinder a is first node', r.doc.nodes[0].label, 'Cylinder A');
+  check('from/to: cylinder b is last node',  r.doc.nodes[3].label, 'Cylinder B');
+  check('from/to: bypass edge exists',       r.doc.edges.filter(e => e.kind === 'bypass').length, 1);
+}
+
+// 13. Flow-verb pair "A feeds B" — A appears before B and intermediates follow
+{
+  const r = YMPL.render('pump P-101 feeds valve CV-101 to separator V-201');
+  check('flow-verb: 3 nodes',        r.doc.nodes.length, 3);
+  check('flow-verb: P-101 is first', r.doc.nodes[0].label, 'P-101');
+  check('flow-verb: V-201 is last',  r.doc.nodes[2].label, 'V-201');
+}
+
+// 14. Upstream/downstream keyword — downstream node deferred to chain end
+{
+  const r = YMPL.render('P-101 upstream of V-201, with CV-101 in between');
+  check('upstream: 3 nodes',       r.doc.nodes.length, 3);
+  check('upstream: V-201 is last', r.doc.nodes[2].label, 'V-201');
+}
+
 console.log('\n── No dependency on old SDK files ────────────────────────────');
 
 // 12. Confirm old SDK modules are NOT loaded
