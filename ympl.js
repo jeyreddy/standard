@@ -212,6 +212,18 @@
   }
   SORTED_TERMS.sort((a, b) => b.term.length - a.term.length);
 
+  // Words that must NOT be used as label prefixes when scanning backward
+  const LABEL_STOP = new Set([
+    'a','an','the','and','or','but','nor','so','yet',
+    'in','on','at','to','for','of','with','from','by','into','through','via','over','under',
+    'is','are','was','were','be','been','being','have','has','had',
+    'do','does','did','will','would','can','could','should','shall','may','might',
+    'it','its','this','that','these','those','which','who','what','where','when',
+    'then','after','before','while','until','if','as','although','because',
+    'connected','fed','sent','routed','pumped','flows','feeds','also','just',
+    'only','any','all','some','no','not','each','both','either','here','there',
+  ]);
+
   // ─── NORMALIZER ────────────────────────────────────────────────────────────
 
   const TYPOS = [
@@ -341,6 +353,27 @@
           for (let j = endConsumed; j < scanEnd; j++) used[j] = 1;
         }
 
+        // ── Backward prefix scan: "co2 tank" → "CO2 Tank" ──────────────────
+        // Only when label came from the term itself (no ISA tag override).
+        // Looks one word back; skips stop words and already-consumed chars.
+        if (!tagM) {
+          let bj = i - 1;
+          while (bj >= 0 && lower[bj] === ' ') bj--;   // skip spaces
+          if (bj >= 0 && /[a-z0-9]/.test(lower[bj])) {
+            let bStart = bj;
+            while (bStart > 0 && /[a-z0-9]/.test(lower[bStart - 1])) bStart--;
+            const prevWord = lower.slice(bStart, bj + 1);
+            let bUsed = false;
+            for (let k = bStart; k <= bj; k++) if (used[k]) { bUsed = true; break; }
+            if (!bUsed && !LABEL_STOP.has(prevWord)) {
+              // Uppercase chemical formulas (contain digit: co2→CO2, h2s→H2S); titleCase otherwise
+              const pfx = /\d/.test(prevWord) ? prevWord.toUpperCase() : titleCase(prevWord);
+              label = pfx + ' ' + label;
+              for (let k = bStart; k <= bj + 1; k++) used[k] = 1;  // word + trailing space
+            }
+          }
+        }
+
         found.push({ label, kind, start: i });
         i = scanEnd;
         matched = true;
@@ -392,8 +425,8 @@
 
     const lower = text.toLowerCase();
 
-    // Bypass synonyms: bypass pipe/loop, parallel path, alternative route, crossover
-    const bypassRe = /(?:bypass(?:\s+(?:line|pipe|loop|valve))?|parallel\s+path|alternative\s+route|crossover)\s+(?:around|over)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
+    // Bypass — pattern A: "bypass [line|pipe|loop] around/over/across X"
+    const bypassRe = /(?:bypass(?:\s+(?:line|pipe|loop|valve))?|parallel\s+path|alternative\s+route|crossover)\s+(?:around|over|across)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
     let m;
     while ((m = bypassRe.exec(lower)) !== null) {
       const anchor = m[1].trim();
@@ -402,6 +435,17 @@
       const idx = nodes.indexOf(target);
       if (idx > 0 && idx < nodes.length - 1) {
         edges.push({ from: nodes[idx - 1].id, to: nodes[idx + 1].id, kind: 'bypass', label: 'Bypass' });
+      }
+    }
+
+    // Bypass — pattern B: "[node label] with [a] bypass"
+    // Handles: "control valve with a bypass", "CV-101 with bypass line"
+    for (let idx = 1; idx < nodes.length - 1; idx++) {
+      const nl = escRe(nodes[idx].label.toLowerCase());
+      if (new RegExp('\\b' + nl + '\\s+with\\s+(?:a\\s+|the\\s+)?bypass\\b').test(lower)) {
+        if (!edges.some(e => e.from === nodes[idx-1].id && e.to === nodes[idx+1].id && e.kind === 'bypass')) {
+          edges.push({ from: nodes[idx-1].id, to: nodes[idx+1].id, kind: 'bypass', label: 'Bypass' });
+        }
       }
     }
 
