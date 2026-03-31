@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>YMPL — Process Model Codec</title>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+<script src="ympl.js"></script>
+<style>
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --s2:      #21262d;
+  --border:  #30363d;
+  --accent:  #58a6ff;
+  --green:   #3fb950;
+  --orange:  #ffa657;
+  --purple:  #a371f7;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --red:     #f85149;
+  --r:       6px;
+  --mono:    'Menlo','Consolas','Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px;}
+
+/* ── Header ── */
+header{
+  padding:9px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.logo{width:26px;height:26px;border-radius:5px;
+  background:linear-gradient(135deg,#1f6feb,#58a6ff);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;flex-shrink:0;}
+header h1{font-size:13px;font-weight:600;}
+header .sub{color:var(--muted);font-size:11px;}
+#mode-pill{margin-left:auto;font-size:10px;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--border);color:var(--muted);}
+
+/* ── Three-column layout ── */
+.workspace{display:grid;grid-template-columns:220px 1fr 1fr;flex:1;min-height:0;}
+
+/* ── Examples sidebar ── */
+.sidebar{border-right:1px solid var(--border);display:flex;flex-direction:column;
+  background:var(--surface);min-height:0;overflow-y:auto;}
+.sidebar-section{padding:8px 10px 4px;font-size:9px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.ex-btn{
+  display:block;width:100%;text-align:left;padding:6px 10px;
+  background:transparent;border:none;border-bottom:1px solid var(--border);
+  color:var(--text);font-size:11px;cursor:pointer;line-height:1.4;
+  transition:background .12s;
+}
+.ex-btn:hover{background:var(--s2);}
+.ex-btn .tag{font-size:9px;color:var(--muted);margin-top:1px;}
+.ex-btn.messy .tag{color:var(--orange);}
+.ex-btn.yaml  .tag{color:var(--accent);}
+.ex-btn.tags  .tag{color:var(--purple);}
+.ex-btn.branch .tag{color:var(--green);}
+
+/* ── Input panel ── */
+.input-panel{display:flex;flex-direction:column;min-height:0;
+  border-right:1px solid var(--border);}
+.panel-hdr{
+  padding:7px 12px;border-bottom:1px solid var(--border);
+  font-size:9px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
+textarea{
+  flex:1;resize:none;background:transparent;border:none;outline:none;
+  color:var(--text);font-family:var(--mono);font-size:12px;
+  line-height:1.65;padding:12px;min-height:0;
+}
+textarea::placeholder{color:var(--muted);opacity:.4;}
+.toolbar{
+  display:flex;gap:6px;padding:7px 12px;
+  border-top:1px solid var(--border);flex-shrink:0;background:var(--surface);
+  align-items:center;
+}
+.btn{padding:5px 14px;border-radius:var(--r);border:none;
+  font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;
+  transition:opacity .15s;}
+.btn:hover{opacity:.8;}
+.btn-primary{background:linear-gradient(135deg,#1f6feb,#388bfd);color:#fff;}
+.btn-sm{padding:4px 10px;background:transparent;border:1px solid var(--border);
+  color:var(--muted);font-size:11px;border-radius:var(--r);cursor:pointer;}
+.btn-sm:hover{background:var(--s2);}
+#conf{margin-left:auto;font-size:11px;color:var(--muted);}
+.conf-high   {color:var(--green);}
+.conf-medium {color:var(--orange);}
+.conf-low    {color:var(--red);}
+
+/* ── Output panel ── */
+.output-panel{display:flex;flex-direction:column;min-height:0;}
+.tabs{display:flex;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;padding:0 12px;}
+.tab{padding:8px 14px;font-size:11px;font-weight:500;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;
+  transition:color .15s;user-select:none;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.pane{display:none;flex:1;min-height:0;flex-direction:column;}
+.pane.active{display:flex;}
+
+/* YAML pane */
+#out-yaml{flex:1;resize:none;background:var(--s2);border:none;outline:none;
+  color:var(--text);font-family:var(--mono);font-size:11.5px;
+  line-height:1.7;padding:12px;min-height:0;}
+
+/* Text pane */
+#out-text{flex:1;padding:16px;font-size:13px;line-height:1.8;
+  color:var(--text);overflow-y:auto;}
+
+/* Diagram pane */
+#out-svg{flex:1;overflow:auto;padding:14px;
+  display:flex;align-items:flex-start;justify-content:flex-start;}
+
+/* Help pane */
+.help{flex:1;overflow-y:auto;padding:16px;font-size:12px;line-height:1.7;}
+.help h2{font-size:12px;font-weight:700;color:var(--accent);
+  margin:14px 0 6px;text-transform:uppercase;letter-spacing:.06em;}
+.help h2:first-child{margin-top:0;}
+.help p{color:var(--muted);margin-bottom:6px;}
+.help code{font-family:var(--mono);font-size:11px;background:var(--s2);
+  padding:1px 5px;border-radius:3px;color:var(--text);}
+.help table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+.help td,.help th{padding:4px 8px;border:1px solid var(--border);
+  font-size:11px;text-align:left;}
+.help th{background:var(--s2);color:var(--muted);font-weight:600;}
+.help .schema{background:var(--s2);border:1px solid var(--border);
+  border-radius:var(--r);padding:10px 12px;font-family:var(--mono);
+  font-size:11px;color:var(--text);white-space:pre;overflow-x:auto;margin:6px 0 10px;}
+
+/* Empty state */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:8px;color:var(--muted);}
+.empty-icon{font-size:28px;opacity:.18;}
+.err{margin:10px;padding:9px 12px;background:rgba(248,81,73,.1);
+  border:1px solid rgba(248,81,73,.3);color:var(--red);border-radius:var(--r);
+  font-size:11px;font-family:var(--mono);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Y</div>
+  <h1>YMPL Process Model Codec</h1>
+  <span class="sub">v1.0 &nbsp;·&nbsp; ympl.js</span>
+  <div id="mode-pill">ready</div>
+</header>
+
+<div class="workspace">
+
+  <!-- ── SIDEBAR: Examples ── -->
+  <div class="sidebar">
+
+    <div class="sidebar-section">Simple flows</div>
+    <button class="ex-btn" onclick="load_(this)">
+      feed tank through pump to separator
+      <div class="tag">simple 3-node flow</div>
+    </button>
+    <button class="ex-btn" onclick="load_(this)">
+      flash drum through trim cooler to product tank
+      <div class="tag">vessels + heat exchanger</div>
+    </button>
+    <button class="ex-btn" onclick="load_(this)">
+      suction drum to centrifugal pump to heat exchanger to distillation column
+      <div class="tag">4-node chain</div>
+    </button>
+
+    <div class="sidebar-section">ISA tag IDs</div>
+    <button class="ex-btn tags" onclick="load_(this)">
+      tank 1 feeds P-101 through CV-101 to separator V-201
+      <div class="tag">tag IDs resolve to kinds</div>
+    </button>
+    <button class="ex-btn tags" onclick="load_(this)">
+      V-101 to P-101 through E-101 to C-201
+      <div class="tag">tag-only input</div>
+    </button>
+
+    <div class="sidebar-section">Bypass &amp; recycle</div>
+    <button class="ex-btn branch" onclick="load_(this)">
+      feed tank to P-101 through CV-101 to V-201, bypass around CV-101
+      <div class="tag">bypass edge</div>
+    </button>
+    <button class="ex-btn branch" onclick="load_(this)">
+      suction drum to compressor K-101 to cooler E-101 to product drum, recycle line back to suction drum
+      <div class="tag">recycle edge</div>
+    </button>
+    <button class="ex-btn branch" onclick="load_(this)">
+      feed drum through sealless pump to overhead accumulator, parallel path around pump
+      <div class="tag">bypass synonym</div>
+    </button>
+
+    <div class="sidebar-section">Messy / typos</div>
+    <button class="ex-btn messy" onclick="load_(this)">
+      pumpp pushes into cntrol valev and then to heet exhanger
+      <div class="tag">spelling errors normalised</div>
+    </button>
+    <button class="ex-btn messy" onclick="load_(this)">
+      chek vlv isolates reacter frum blwer
+      <div class="tag">multiple typos</div>
+    </button>
+    <button class="ex-btn messy" onclick="load_(this)">
+      tnak 1 feeds mag-drive pump thru kontrol valve too seprator V-201
+      <div class="tag">heavy typos + tag ID</div>
+    </button>
+
+    <div class="sidebar-section">Rich vocabulary</div>
+    <button class="ex-btn" onclick="load_(this)">
+      sealless pump to fractionating column via dbb valve
+      <div class="tag">word bank terms</div>
+    </button>
+    <button class="ex-btn" onclick="load_(this)">
+      overhead accumulator through fin-fan cooler to reflux drum, recirculation line back to overhead accumulator
+      <div class="tag">recirculation synonym</div>
+    </button>
+
+    <div class="sidebar-section">YAML → text + diagram</div>
+    <button class="ex-btn yaml" onclick="loadYaml('y1')">
+      P-101 train with bypass
+      <div class="tag">4 nodes, 1 bypass edge</div>
+    </button>
+    <button class="ex-btn yaml" onclick="loadYaml('y2')">
+      Compressor circuit with recycle
+      <div class="tag">4 nodes, 1 recycle edge</div>
+    </button>
+
+  </div>
+
+  <!-- ── INPUT ── -->
+  <div class="input-panel">
+    <div class="panel-hdr">
+      <div class="dot"></div>
+      Input — messy text or YMPL yaml (auto-detected)
+    </div>
+    <textarea id="inp" spellcheck="false"
+      placeholder="Type or paste process text here, then click Parse.
+Click any example on the left to load it.
+
+Text example:
+  flash drum through trim cooler to product tank
+
+YAML example:
+  schema_version: ympl-1.0
+  nodes: ...
+
+Ctrl+Enter to parse."></textarea>
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="run()">&#9654;&nbsp; Parse</button>
+      <button class="btn-sm" onclick="clear_()">Clear</button>
+      <label class="btn-sm" style="cursor:pointer" title="Load a .yaml or .txt file">
+        &#128194; Load file
+        <input type="file" accept=".yaml,.yml,.txt" style="display:none" onchange="loadFile(this)"/>
+      </label>
+      <span id="conf"></span>
+    </div>
+  </div>
+
+  <!-- ── OUTPUT ── -->
+  <div class="output-panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="yaml">YAML</div>
+      <div class="tab"        data-tab="text">Text</div>
+      <div class="tab"        data-tab="svg">Diagram</div>
+      <div class="tab"        data-tab="help">Reference</div>
+    </div>
+
+    <div id="pane-yaml" class="pane active">
+      <textarea id="out-yaml" readonly placeholder="Generated YAML will appear here..."></textarea>
+    </div>
+
+    <div id="pane-text" class="pane">
+      <div id="out-text">
+        <div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see text</p></div>
+      </div>
+    </div>
+
+    <div id="pane-svg" class="pane">
+      <div id="out-svg">
+        <div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see diagram</p></div>
+      </div>
+    </div>
+
+    <div id="pane-help" class="pane">
+      <div class="help">
+
+        <h2>What YMPL does</h2>
+        <p>Converts messy process text &harr; structured YAML + SVG diagram. One portable file, works in any app.</p>
+
+        <h2>Two input modes</h2>
+        <table>
+          <tr><th>Input</th><th>Output</th></tr>
+          <tr><td>Messy text (any spelling)</td><td>YMPL YAML + Diagram + Text</td></tr>
+          <tr><td>YMPL YAML (schema_version: ympl-1.0)</td><td>Diagram + Text description</td></tr>
+        </table>
+
+        <h2>YMPL 1.0 schema</h2>
+        <div class="schema">schema_version: ympl-1.0
+id: feed_tank_to_v_201
+title: Feed Tank to V-201
+nodes:
+  - id: n1
+    label: Feed Tank
+    kind: vessel          # vessel|pump|valve|checkvalve|
+  - id: n2                # heat_exchanger|compressor|
+    label: P-101          # column|reactor|relief|
+    kind: pump            # filter|meter
+edges:
+  - from: n1
+    to: n2
+    kind: stream          # stream (default)|bypass|recycle
+  - from: n1
+    to: n3
+    kind: bypass
+    label: Bypass
+meta:
+  confidence: high        # high|medium|low|none
+  source_text: "raw input text"</div>
+
+        <h2>Node kinds recognised</h2>
+        <table>
+          <tr><th>Kind</th><th>Example synonyms</th></tr>
+          <tr><td>vessel</td><td>tank, drum, separator, flash drum, overhead accumulator, ko drum, suction scrubber…</td></tr>
+          <tr><td>pump</td><td>pump, centrifugal pump, sealless pump, mag-drive pump, dosing pump…</td></tr>
+          <tr><td>valve</td><td>control valve, gate valve, ball valve, dbb valve, esdv, modulating valve…</td></tr>
+          <tr><td>checkvalve</td><td>check valve, nrv, non-return valve, backflow preventer…</td></tr>
+          <tr><td>heat_exchanger</td><td>heat exchanger, trim cooler, fin-fan cooler, reboiler, condenser, s&amp;t…</td></tr>
+          <tr><td>compressor</td><td>compressor, blower, fan, recip compressor, turbocompressor…</td></tr>
+          <tr><td>column</td><td>column, fractionator, distillation column, absorber, stripper…</td></tr>
+          <tr><td>reactor</td><td>reactor, cstr, pfr, fixed bed reactor…</td></tr>
+          <tr><td>relief</td><td>psv, rupture disc, conservation vent, safety valve…</td></tr>
+        </table>
+
+        <h2>ISA tag IDs auto-resolved</h2>
+        <table>
+          <tr><th>Tag prefix</th><th>Resolves to</th></tr>
+          <tr><td>P-101</td><td>pump</td></tr>
+          <tr><td>CV-101, FV-101, LV-101, PV-101</td><td>valve</td></tr>
+          <tr><td>E-101</td><td>heat_exchanger</td></tr>
+          <tr><td>K-101</td><td>compressor</td></tr>
+          <tr><td>V-101, D-101, T-101</td><td>vessel</td></tr>
+          <tr><td>C-101</td><td>column</td></tr>
+          <tr><td>R-101</td><td>reactor</td></tr>
+        </table>
+
+        <h2>Topology keywords</h2>
+        <table>
+          <tr><th>Phrase</th><th>Effect</th></tr>
+          <tr><td>bypass around X</td><td>bypass edge from predecessor to successor of X</td></tr>
+          <tr><td>parallel path around X / crossover around X</td><td>same as bypass</td></tr>
+          <tr><td>recycle line back to X / return line to X</td><td>recycle edge from last node to X</td></tr>
+          <tr><td>recirculation line back to X / product recycle to X</td><td>same as recycle</td></tr>
+        </table>
+
+        <h2>API — embed in any app</h2>
+        <div class="schema">// Browser
+&lt;script src="ympl.js"&gt;&lt;/script&gt;   // + js-yaml CDN above it
+
+// Node.js
+const YMPL = require('./ympl.js')
+
+// Both environments — same call
+const result = YMPL.render(textOrYaml)
+result.yaml   // YMPL 1.0 YAML string
+result.svg    // SVG diagram string
+result.text   // plain English description
+result.doc    // { nodes, edges, ... } JS object</div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Tab switching ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('pane-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── YAML example store (kept in JS to preserve indentation exactly) ──────────
+const YAML_EXAMPLES = {
+  y1: `schema_version: ympl-1.0
+id: p101_train
+title: P-101 Train
+nodes:
+  - id: n1
+    label: Feed Tank
+    kind: vessel
+  - id: n2
+    label: P-101
+    kind: pump
+  - id: n3
+    label: CV-101
+    kind: valve
+  - id: n4
+    label: V-201
+    kind: vessel
+edges:
+  - from: n1
+    to: n2
+    kind: stream
+  - from: n2
+    to: n3
+    kind: stream
+  - from: n3
+    to: n4
+    kind: stream
+  - from: n2
+    to: n4
+    kind: bypass
+    label: Bypass
+meta:
+  confidence: high
+  source_text: manual`,
+
+  y2: `schema_version: ympl-1.0
+id: compressor_circuit
+title: Compressor Circuit with Recycle
+nodes:
+  - id: n1
+    label: Suction Drum
+    kind: vessel
+  - id: n2
+    label: K-101
+    kind: compressor
+  - id: n3
+    label: E-101
+    kind: heat_exchanger
+  - id: n4
+    label: Product Drum
+    kind: vessel
+edges:
+  - from: n1
+    to: n2
+    kind: stream
+  - from: n2
+    to: n3
+    kind: stream
+  - from: n3
+    to: n4
+    kind: stream
+  - from: n4
+    to: n1
+    kind: recycle
+    label: Recycle
+meta:
+  confidence: high
+  source_text: manual`,
+};
+
+// ── Load sidebar example (text) ───────────────────────────────────────────────
+function load_(btn) {
+  document.getElementById('inp').value = btn.childNodes[0].textContent.trim();
+  run();
+}
+
+// ── Load YAML example by key ──────────────────────────────────────────────────
+function loadYaml(key) {
+  document.getElementById('inp').value = YAML_EXAMPLES[key];
+  run();
+}
+
+// ── Load file from disk ───────────────────────────────────────────────────────
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('inp').value = e.target.result;
+    run();
+  };
+  reader.readAsText(file);
+  input.value = ''; // reset so same file can be reloaded
+}
+
+// ── Ctrl+Enter ───────────────────────────────────────────────────────────────
+document.getElementById('inp').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+});
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+function run() {
+  const raw = document.getElementById('inp').value.trim();
+  if (!raw) return;
+
+  const isYml = /^schema_version:|^---/.test(raw);
+  document.getElementById('mode-pill').textContent =
+    isYml ? 'YAML → text + diagram' : 'text → YAML + diagram';
+
+  let result;
+  try {
+    result = YMPL.render(raw);
+  } catch (err) {
+    showErr(err.message); return;
+  }
+
+  // confidence badge
+  const conf = (result.doc.meta || {}).confidence || 'none';
+  document.getElementById('conf').innerHTML =
+    `<span class="conf-${conf}">&#9679;</span>&nbsp;${conf} confidence`;
+
+  // YAML tab
+  document.getElementById('out-yaml').value = result.yaml;
+
+  // Text tab
+  const nodes = (result.doc.nodes || []).length;
+  const edges = (result.doc.edges || []).filter(e => e.kind !== 'stream').length;
+  document.getElementById('out-text').innerHTML =
+    `<p style="margin-bottom:12px">${esc(result.text)}</p>
+     <p style="font-size:11px;color:var(--muted)">${nodes} node${nodes!==1?'s':''} &nbsp;·&nbsp; ${edges} branch edge${edges!==1?'s':''}</p>`;
+
+  // Diagram tab
+  document.getElementById('out-svg').innerHTML = result.svg;
+
+  // Switch to YAML tab on first parse
+  if (!document.querySelector('.tab[data-tab="yaml"]').classList.contains('active')) {
+    document.querySelector('.tab[data-tab="yaml"]').click();
+  }
+}
+
+function clear_() {
+  document.getElementById('inp').value = '';
+  document.getElementById('conf').innerHTML = '';
+  document.getElementById('mode-pill').textContent = 'ready';
+  document.getElementById('out-yaml').value = '';
+  document.getElementById('out-text').innerHTML =
+    '<div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see text</p></div>';
+  document.getElementById('out-svg').innerHTML =
+    '<div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see diagram</p></div>';
+}
+
+function showErr(msg) {
+  document.getElementById('out-yaml').value = '';
+  document.getElementById('out-text').innerHTML = `<div class="err">${esc(msg)}</div>`;
+  document.getElementById('out-svg').innerHTML  = `<div class="err">${esc(msg)}</div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "ympl",
+  "version": "1.0.0",
+  "description": "YMPL Process Model Codec — messy text ↔ YAML + SVG diagram",
+  "main": "ympl.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "js-yaml": "^4.1.1"
+  }
+}
