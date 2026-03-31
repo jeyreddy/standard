@@ -416,46 +416,92 @@
 
   function buildEdges(nodes, text) {
     if (nodes.length < 2) return [];
-    const edges = [];
+    const edges  = [];
+    const lower  = text.toLowerCase();
+    let m;
 
-    // Main path: each node connects to the next in text order
-    for (let i = 0; i < nodes.length - 1; i++) {
-      edges.push({ from: nodes[i].id, to: nodes[i + 1].id, kind: 'stream' });
+    // ── Step 1: Identify recycle-branch nodes ────────────────────────────────
+    // Nodes that appear in "recycle … via [node]" clauses are on the recycle
+    // branch, not the main sequential flow. Exclude them from stream chain.
+    const recycleBranch = new Set();
+    const recycleViaRe  = /\brecycl\w*\b[^.!?]*?\bvia\s+(?:a\s+|the\s+)?([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n!?]|$)/gi;
+    while ((m = recycleViaRe.exec(lower)) !== null) {
+      const viaLabel = m[1].trim();
+      const viaNode  = nodes.find(n => matchesLabel(n.label, viaLabel));
+      if (viaNode) recycleBranch.add(viaNode.id);
     }
 
-    const lower = text.toLowerCase();
+    // ── Step 2: Sequential stream edges (main flow only) ─────────────────────
+    const mainFlow = nodes.filter(n => !recycleBranch.has(n.id));
+    for (let i = 0; i < mainFlow.length - 1; i++) {
+      edges.push({ from: mainFlow[i].id, to: mainFlow[i + 1].id, kind: 'stream' });
+    }
 
-    // Bypass — pattern A: "bypass [line|pipe|loop] around/over/across X"
+    // ── Step 3: Bypass — pattern A: "bypass [line|pipe|loop] around/over/across X"
     const bypassRe = /(?:bypass(?:\s+(?:line|pipe|loop|valve))?|parallel\s+path|alternative\s+route|crossover)\s+(?:around|over|across)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
-    let m;
     while ((m = bypassRe.exec(lower)) !== null) {
       const anchor = m[1].trim();
-      const target = nodes.find(n => matchesLabel(n.label, anchor));
+      const target = mainFlow.find(n => matchesLabel(n.label, anchor));
       if (!target) continue;
-      const idx = nodes.indexOf(target);
-      if (idx > 0 && idx < nodes.length - 1) {
-        edges.push({ from: nodes[idx - 1].id, to: nodes[idx + 1].id, kind: 'bypass', label: 'Bypass' });
+      const idx = mainFlow.indexOf(target);
+      if (idx > 0 && idx < mainFlow.length - 1) {
+        edges.push({ from: mainFlow[idx - 1].id, to: mainFlow[idx + 1].id, kind: 'bypass', label: 'Bypass' });
       }
     }
 
-    // Bypass — pattern B: "[node label] with [a] bypass"
-    // Handles: "control valve with a bypass", "CV-101 with bypass line"
-    for (let idx = 1; idx < nodes.length - 1; idx++) {
-      const nl = escRe(nodes[idx].label.toLowerCase());
+    // ── Step 4: Bypass — pattern B: "[node label] with [a] bypass"
+    for (let idx = 1; idx < mainFlow.length - 1; idx++) {
+      const nl = escRe(mainFlow[idx].label.toLowerCase());
       if (new RegExp('\\b' + nl + '\\s+with\\s+(?:a\\s+|the\\s+)?bypass\\b').test(lower)) {
-        if (!edges.some(e => e.from === nodes[idx-1].id && e.to === nodes[idx+1].id && e.kind === 'bypass')) {
-          edges.push({ from: nodes[idx-1].id, to: nodes[idx+1].id, kind: 'bypass', label: 'Bypass' });
+        if (!edges.some(e => e.from === mainFlow[idx-1].id && e.to === mainFlow[idx+1].id && e.kind === 'bypass')) {
+          edges.push({ from: mainFlow[idx-1].id, to: mainFlow[idx+1].id, kind: 'bypass', label: 'Bypass' });
         }
       }
     }
 
-    // Recycle synonyms: recycle stream/loop/pipe, product recycle, return line, recirculation line
+    // ── Step 5a: Recycle — existing pattern "recycle line back to [anchor]"
     const recycleRe = /(?:recycle(?:\s+(?:stream|loop|pipe|line))?|product\s+recycle|return\s+line|recirculation\s+line)\s+(?:to|back\s+to|return\s+to|around)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
     while ((m = recycleRe.exec(lower)) !== null) {
       const anchor = m[1].trim();
       const target = nodes.find(n => matchesLabel(n.label, anchor));
       if (!target) continue;
-      edges.push({ from: nodes[nodes.length - 1].id, to: target.id, kind: 'recycle', label: 'Recycle' });
+      edges.push({ from: mainFlow[mainFlow.length - 1].id, to: target.id, kind: 'recycle', label: 'Recycle' });
+    }
+
+    // ── Step 5b: Recycle — "recycle … via [node]" with subject detection
+    // Handles: "reactor has a recycle line from outlet to inlet via check valve"
+    //   → reactor → check_valve (stream on recycle branch)
+    //   → check_valve → upstream-of-reactor (recycle edge)
+    recycleViaRe.lastIndex = 0;
+    while ((m = recycleViaRe.exec(lower)) !== null) {
+      const viaLabel = m[1].trim();
+      const viaNode  = nodes.find(n => matchesLabel(n.label, viaLabel));
+      if (!viaNode) continue;
+
+      // Find clause boundaries (sentence containing the "recycle … via" phrase)
+      const clauseStart = Math.max(0, lower.lastIndexOf('.', m.index) + 1);
+      const clauseText  = lower.slice(clauseStart, m.index + m[0].length);
+
+      // Subject = last main-flow node mentioned in the clause (closest to "recycle")
+      let subjectNode = null;
+      for (const n of mainFlow) {
+        if (new RegExp('\\b' + escRe(n.label.toLowerCase()) + '\\b').test(clauseText)) {
+          subjectNode = n;
+        }
+      }
+      if (!subjectNode) continue;
+
+      const subjectIdx = mainFlow.indexOf(subjectNode);
+
+      // subject → via_node : stream (recycle branch leg)
+      if (!edges.some(e => e.from === subjectNode.id && e.to === viaNode.id)) {
+        edges.push({ from: subjectNode.id, to: viaNode.id, kind: 'stream' });
+      }
+      // via_node → node upstream of subject : recycle
+      const recycleTarget = subjectIdx > 0 ? mainFlow[subjectIdx - 1] : mainFlow[0];
+      if (!edges.some(e => e.from === viaNode.id && e.to === recycleTarget.id && e.kind === 'recycle')) {
+        edges.push({ from: viaNode.id, to: recycleTarget.id, kind: 'recycle', label: 'Recycle' });
+      }
     }
 
     return edges;
@@ -708,11 +754,19 @@
     const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
 
     // Build main stream path
-    const streamEdges = edges.filter(e => !e.kind || e.kind === 'stream');
-    const inDegree    = new Set(streamEdges.map(e => e.to));
-    const start       = nodes.find(n => !inDegree.has(n.id)) || nodes[0];
-    const edgeMap     = {};
-    for (const e of streamEdges) edgeMap[e.from] = e.to;
+    const streamEdges    = edges.filter(e => !e.kind || e.kind === 'stream');
+    const inDegree       = new Set(streamEdges.map(e => e.to));
+    const start          = nodes.find(n => !inDegree.has(n.id)) || nodes[0];
+    // Nodes that are sources of recycle edges — they belong to the recycle branch,
+    // not the main flow. When a node has multiple outgoing stream edges, prefer the
+    // one whose target is NOT a recycle-branch source.
+    const recycleSourceSet = new Set(edges.filter(e => e.kind === 'recycle').map(e => e.from));
+    const edgeMap        = {};
+    for (const e of streamEdges) {
+      if (!edgeMap[e.from] || recycleSourceSet.has(edgeMap[e.from])) {
+        edgeMap[e.from] = e.to;
+      }
+    }
 
     const path = [start];
     const seen = new Set([start.id]);
