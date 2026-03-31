@@ -241,6 +241,35 @@ console.log('\n── Relation extraction (Tier 1) ─────────�
   })().catch(e => { console.log('  FAIL  renderAsync threw: ' + e.message); fail++; });
 }
 
+console.log('\n── Warnings & smart LLM trigger ─────────────────────────────');
+
+// 18. Clean parse → no warnings
+{
+  const r = YMPL.render('flash drum to trim cooler to product tank');
+  check('warnings: clean parse has none', r.warnings.length, 0);
+}
+
+// 19. bypass keyword but no bypass edge → warning generated
+{
+  const r = YMPL.render('feed tank to pump to reactor with a bypass somewhere');
+  check('warnings: bypass keyword flagged', r.warnings.some(w => w.includes('bypass keyword')), true);
+}
+
+// 20. recycle keyword but no recycle edge → warning generated
+{
+  const r = YMPL.render('suction drum to compressor to product drum, recycle to somewhere unknown');
+  check('warnings: recycle keyword flagged', r.warnings.some(w => w.includes('recycle keyword')), true);
+}
+
+// 21. renderAsync no-LLM → usedLlm false, warnings present
+{
+  (async () => {
+    const r = await YMPL.renderAsync('feed tank to pump to reactor with a bypass somewhere');
+    check('renderAsync: usedLlm false when no llm config', r.usedLlm, false);
+    check('renderAsync: warnings still surfaced',          r.warnings.some(w => w.includes('bypass')), true);
+  })().catch(e => { console.log('  FAIL  renderAsync warnings: ' + e.message); fail++; });
+}
+
 console.log('\n── No dependency on old SDK files ────────────────────────────');
 
 // 12. Confirm old SDK modules are NOT loaded

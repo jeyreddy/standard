@@ -893,13 +893,55 @@ ${nodeSvg}
     return lines.slice(0, 2); // max 2 lines in node box
   }
 
+  // ─── PARSE WARNINGS ───────────────────────────────────────────────────────
+  // Inspects a completed parse and returns a list of gaps between what the
+  // text implies and what was actually built. Empty array = clean parse.
+  //
+  // Warnings also drive the smart LLM fallback trigger in renderAsync —
+  // if any actionable warning exists, LLM is called even when confidence
+  // is 'high' (node count can be correct while edge topology is incomplete).
+
+  function checkWarnings(nodes, edges, sourceText) {
+    const w   = [];
+    const low = sourceText.toLowerCase();
+
+    // ── Topology keywords with no matching edge ────────────────────────────
+    const bypassKw  = /\bbypass(?:ed|es)?\b/.test(low);
+    const recycleKw = /\brecycl\w*\b|\breturn\s+line\b|\brecirculat\w*\b/.test(low);
+
+    if (bypassKw  && !edges.some(e => e.kind === 'bypass')) {
+      w.push('bypass keyword found but no bypass edge was created — rephrase as "bypass around [node]" or "[node] with a bypass"');
+    }
+    if (recycleKw && !edges.some(e => e.kind === 'recycle')) {
+      w.push('recycle keyword found but no recycle edge was created — rephrase as "recycle line back to [node]"');
+    }
+
+    // ── Connectivity gaps ──────────────────────────────────────────────────
+    if (nodes.length >= 2 && edges.filter(e => e.kind === 'stream').length === 0) {
+      w.push(`${nodes.length} nodes found but no stream edges — flow connections unclear`);
+    }
+
+    if (nodes.length >= 2) {
+      const touched = new Set(edges.flatMap(e => [e.from, e.to]));
+      for (const n of nodes) {
+        if (!touched.has(n.id)) {
+          w.push(`isolated node: "${n.label}" has no connections`);
+        }
+      }
+    }
+
+    return w;
+  }
+
   // ─── SYNC RENDER (shared by render and renderAsync) ───────────────────────
 
   function _render(input) {
-    const str   = String(input || '').trim();
-    const isYml = /^schema_version:|^---/.test(str);
-    const doc   = isYml ? fromYaml(str) : parse(str);
-    return { doc, yaml: toYaml(doc), svg: toSvg(doc), text: toText(doc) };
+    const str    = String(input || '').trim();
+    const isYml  = /^schema_version:|^---/.test(str);
+    const doc    = isYml ? fromYaml(str) : parse(str);
+    // Warnings only make sense for text input (not hand-authored YAML)
+    const warnings = isYml ? [] : checkWarnings(doc.nodes, doc.edges, str);
+    return { doc, yaml: toYaml(doc), svg: toSvg(doc), text: toText(doc), warnings };
   }
 
   // ─── LLM FALLBACK (Tier 3) ─────────────────────────────────────────────────
@@ -1019,31 +1061,47 @@ ${nodeSvg}
      */
     render: _render,
 
+    /** Returns parse warnings for a text input without a full render */
+    checkWarnings,
+
     /**
      * Async render with optional LLM fallback (Tier 3).
-     * Falls back to LLM only when Tier 1 returns confidence 'low' or 'none'.
+     *
+     * Triggers LLM when Tier 1 result has:
+     *   - confidence 'low' or 'none'  (few nodes found), OR
+     *   - warnings about missing bypass/recycle edges or disconnected nodes
+     *     (nodes found correctly but topology incomplete)
      *
      * options.llm — one of:
      *   { provider: 'ollama', model: 'llama3.2:1b', url: 'http://localhost:11434' }
      *   { provider: 'haiku',  model: 'claude-haiku-4-5-20251001', apiKey: 'sk-ant-...' }
      *
      * Requires fetch API (Node.js 18+ or browser).
-     * Returns same shape as render(): { doc, yaml, svg, text }
+     * Returns { doc, yaml, svg, text, warnings, usedLlm: boolean }
      */
     async renderAsync(input, options) {
       const result = _render(input);
-      if (!options || !options.llm) return result;
+      if (!options || !options.llm) return { ...result, usedLlm: false };
 
       const conf = result.doc.meta && result.doc.meta.confidence;
-      if (conf !== 'low' && conf !== 'none') return result;  // Tier 1 was sufficient
+      // Actionable warnings = edge-topology gaps that an LLM can fix
+      const actionable = result.warnings.filter(w =>
+        w.includes('bypass keyword') ||
+        w.includes('recycle keyword') ||
+        w.includes('no stream edges') ||
+        w.includes('isolated node')
+      );
+      const needsLlm = conf === 'low' || conf === 'none' || actionable.length > 0;
+      if (!needsLlm) return { ...result, usedLlm: false };
 
       const rawYaml = await _llmExtract(String(input || '').trim(), options.llm);
-      if (!rawYaml) return result;  // LLM failed — return Tier 1 result unchanged
+      if (!rawYaml) return { ...result, usedLlm: false };  // LLM failed — return Tier 1
 
       try {
-        return _render(rawYaml);
+        const llmResult = _render(rawYaml);
+        return { ...llmResult, usedLlm: true };
       } catch (_) {
-        return result;  // LLM returned invalid YAML — degrade to Tier 1
+        return { ...result, usedLlm: false };  // LLM returned invalid YAML — degrade
       }
     },
   };
