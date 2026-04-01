@@ -142,6 +142,50 @@ textarea::placeholder{color:var(--muted);opacity:.4;}
 .err{margin:10px;padding:9px 12px;background:rgba(248,81,73,.1);
   border:1px solid rgba(248,81,73,.3);color:var(--red);border-radius:var(--r);
   font-size:11px;font-family:var(--mono);}
+
+/* ── Warning bar ── */
+#warn-bar{display:none;padding:7px 12px;border-top:1px solid rgba(255,166,87,.25);
+  background:rgba(255,166,87,.06);flex-shrink:0;gap:8px;align-items:flex-start;
+  flex-direction:column;}
+#warn-bar.has-warnings{display:flex;}
+#warn-list{display:flex;flex-direction:column;gap:3px;flex:1;}
+#warn-list span{font-size:11px;color:var(--orange);line-height:1.5;}
+#warn-list span::before{content:'⚠ ';}
+#warn-actions{display:flex;align-items:center;gap:8px;}
+#ai-btn{padding:4px 11px;border-radius:var(--r);border:1px solid var(--orange);
+  background:rgba(255,166,87,.12);color:var(--orange);font-size:11px;
+  font-weight:600;font-family:inherit;cursor:pointer;transition:background .15s;}
+#ai-btn:hover{background:rgba(255,166,87,.25);}
+#ai-btn:disabled{opacity:.45;cursor:default;}
+#ai-shortcut{font-size:10px;color:var(--muted);}
+
+/* ── AI settings row ── */
+#ai-settings{display:none;padding:6px 12px 7px;border-top:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;gap:6px;align-items:center;flex-wrap:wrap;}
+#ai-settings.open{display:flex;}
+#ai-settings label{font-size:10px;color:var(--muted);}
+#ai-settings input{background:var(--s2);border:1px solid var(--border);color:var(--text);
+  border-radius:3px;padding:3px 7px;font-size:11px;font-family:var(--mono);outline:none;}
+#ai-settings input:focus{border-color:var(--accent);}
+#ai-settings input.url{width:190px;}
+#ai-settings input.model{width:130px;}
+
+/* ── AI badge in tab bar ── */
+#ai-badge{display:none;margin-left:auto;font-size:10px;
+  padding:2px 8px;border-radius:20px;border:1px solid var(--purple);
+  color:var(--purple);align-self:center;}
+#ai-badge.visible{display:inline-block;}
+
+/* ── Save correction button in tab bar ── */
+#save-correction{display:none;margin-right:6px;padding:2px 9px;border-radius:20px;
+  border:1px solid var(--green);background:transparent;color:var(--green);
+  font-size:10px;font-family:inherit;cursor:pointer;align-self:center;
+  transition:background .15s;}
+#save-correction:hover{background:rgba(63,185,80,.15);}
+#save-correction.visible{display:inline-block;}
+#corrections-count{display:none;font-size:10px;color:var(--muted);
+  align-self:center;margin-right:4px;}
+#corrections-count.visible{display:inline-block;}
 </style>
 </head>
 <body>
@@ -257,7 +301,25 @@ Ctrl+Enter to parse."></textarea>
         &#128194; Load file
         <input type="file" accept=".yaml,.yml,.txt" style="display:none" onchange="loadFile(this)"/>
       </label>
+      <button class="btn-sm" onclick="toggleAiSettings()" title="AI settings">&#9881; AI</button>
       <span id="conf"></span>
+    </div>
+
+    <!-- Warning bar — shown when parse produces warnings -->
+    <div id="warn-bar">
+      <div id="warn-list"></div>
+      <div id="warn-actions">
+        <button id="ai-btn" onclick="runAi()">&#10022; Improve with AI</button>
+        <span id="ai-shortcut">Ctrl+Shift+Enter</span>
+      </div>
+    </div>
+
+    <!-- AI settings — toggle with ⚙ AI button -->
+    <div id="ai-settings">
+      <label>Ollama URL</label>
+      <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()"/>
+      <label>Model</label>
+      <input id="ollama-model" class="model" placeholder="llama3.2:1b" oninput="saveAiSettings()"/>
     </div>
   </div>
 
@@ -268,10 +330,13 @@ Ctrl+Enter to parse."></textarea>
       <div class="tab"        data-tab="text">Text</div>
       <div class="tab"        data-tab="svg">Diagram</div>
       <div class="tab"        data-tab="help">Reference</div>
+      <span id="ai-badge">&#10022; AI-improved</span>
+      <span id="corrections-count"></span>
+      <button id="save-correction" onclick="saveCorrection()">&#10003; Save correction</button>
     </div>
 
     <div id="pane-yaml" class="pane active">
-      <textarea id="out-yaml" readonly placeholder="Generated YAML will appear here..."></textarea>
+      <textarea id="out-yaml" placeholder="Generated YAML will appear here — you can edit it directly."></textarea>
     </div>
 
     <div id="pane-text" class="pane">
@@ -484,15 +549,113 @@ function loadFile(input) {
   input.value = ''; // reset so same file can be reloaded
 }
 
-// ── Ctrl+Enter ───────────────────────────────────────────────────────────────
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.getElementById('inp').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+    e.preventDefault(); run();
+  }
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+    e.preventDefault(); runAi();
+  }
 });
 
-// ── Main ─────────────────────────────────────────────────────────────────────
+// ── AI settings persistence ───────────────────────────────────────────────────
+function loadAiSettings() {
+  document.getElementById('ollama-url').value   = localStorage.getItem('ympl_ollama_url')   || '';
+  document.getElementById('ollama-model').value = localStorage.getItem('ympl_ollama_model') || '';
+}
+function saveAiSettings() {
+  localStorage.setItem('ympl_ollama_url',   document.getElementById('ollama-url').value.trim());
+  localStorage.setItem('ympl_ollama_model', document.getElementById('ollama-model').value.trim());
+}
+function toggleAiSettings() {
+  document.getElementById('ai-settings').classList.toggle('open');
+}
+loadAiSettings();
+
+// ── Corrections (few-shot learning) ──────────────────────────────────────────
+let _lastInput = '';  // tracks raw input text for the current result
+
+function loadCorrections() {
+  try { return JSON.parse(localStorage.getItem('ympl_corrections') || '[]'); } catch(_) { return []; }
+}
+function storeCorrections(arr) {
+  localStorage.setItem('ympl_corrections', JSON.stringify(arr));
+}
+function updateCorrectionsCount() {
+  const n   = loadCorrections().length;
+  const el  = document.getElementById('corrections-count');
+  const btn = document.getElementById('save-correction');
+  if (n > 0) {
+    el.textContent = n + ' saved';
+    el.classList.add('visible');
+  } else {
+    el.classList.remove('visible');
+  }
+}
+updateCorrectionsCount();
+
+function saveCorrection() {
+  const input = _lastInput.trim();
+  const yaml  = document.getElementById('out-yaml').value.trim();
+  if (!input || !yaml) return;
+
+  const arr = loadCorrections();
+  // Replace if same input already exists, otherwise append
+  const idx = arr.findIndex(function(e) { return e.input === input; });
+  if (idx >= 0) arr[idx] = { input, yaml };
+  else          arr.push({ input, yaml });
+
+  storeCorrections(arr);
+  updateCorrectionsCount();
+
+  const btn = document.getElementById('save-correction');
+  btn.textContent = '✓ Saved';
+  setTimeout(function() { btn.innerHTML = '&#10003; Save correction'; }, 1200);
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+function showResult(result, usedLlm) {
+  const conf = (result.doc.meta || {}).confidence || 'none';
+  document.getElementById('conf').innerHTML =
+    `<span class="conf-${conf}">&#9679;</span>&nbsp;${conf} confidence`;
+
+  document.getElementById('out-yaml').value = result.yaml;
+
+  const nodes = (result.doc.nodes || []).length;
+  const edges = (result.doc.edges || []).filter(e => e.kind !== 'stream').length;
+  document.getElementById('out-text').innerHTML =
+    `<p style="margin-bottom:12px">${esc(result.text)}</p>
+     <p style="font-size:11px;color:var(--muted)">${nodes} node${nodes!==1?'s':''} &nbsp;·&nbsp; ${edges} branch edge${edges!==1?'s':''}</p>`;
+
+  document.getElementById('out-svg').innerHTML = result.svg;
+
+  // AI badge
+  const badge = document.getElementById('ai-badge');
+  if (usedLlm) badge.classList.add('visible');
+  else         badge.classList.remove('visible');
+
+  // Save-correction button — visible whenever there is a result
+  document.getElementById('save-correction').classList.add('visible');
+}
+
+function showWarnings(warnings) {
+  const bar  = document.getElementById('warn-bar');
+  const list = document.getElementById('warn-list');
+  if (!warnings || warnings.length === 0) {
+    bar.classList.remove('has-warnings');
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = warnings.map(w => `<span>${esc(w)}</span>`).join('');
+  bar.classList.add('has-warnings');
+}
+
+// ── Main parse ────────────────────────────────────────────────────────────────
 function run() {
   const raw = document.getElementById('inp').value.trim();
   if (!raw) return;
+  _lastInput = raw;
 
   const isYml = /^schema_version:|^---/.test(raw);
   document.getElementById('mode-pill').textContent =
@@ -505,27 +668,43 @@ function run() {
     showErr(err.message); return;
   }
 
-  // confidence badge
-  const conf = (result.doc.meta || {}).confidence || 'none';
-  document.getElementById('conf').innerHTML =
-    `<span class="conf-${conf}">&#9679;</span>&nbsp;${conf} confidence`;
-
-  // YAML tab
-  document.getElementById('out-yaml').value = result.yaml;
-
-  // Text tab
-  const nodes = (result.doc.nodes || []).length;
-  const edges = (result.doc.edges || []).filter(e => e.kind !== 'stream').length;
-  document.getElementById('out-text').innerHTML =
-    `<p style="margin-bottom:12px">${esc(result.text)}</p>
-     <p style="font-size:11px;color:var(--muted)">${nodes} node${nodes!==1?'s':''} &nbsp;·&nbsp; ${edges} branch edge${edges!==1?'s':''}</p>`;
-
-  // Diagram tab
-  document.getElementById('out-svg').innerHTML = result.svg;
+  showResult(result, false);
+  showWarnings(result.warnings || []);
 
   // Switch to YAML tab on first parse
   if (!document.querySelector('.tab[data-tab="yaml"]').classList.contains('active')) {
     document.querySelector('.tab[data-tab="yaml"]').click();
+  }
+}
+
+// ── AI improvement ────────────────────────────────────────────────────────────
+async function runAi() {
+  const raw = document.getElementById('inp').value.trim();
+  if (!raw) return;
+
+  const url   = (document.getElementById('ollama-url').value.trim()   || 'http://localhost:11434');
+  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:1b');
+
+  const btn = document.getElementById('ai-btn');
+  btn.disabled = true;
+  btn.textContent = '…';
+  document.getElementById('mode-pill').textContent = 'AI improving…';
+
+  try {
+    const examples = loadCorrections();
+    const result = await YMPL.renderAsync(raw, {
+      llm: { provider: 'ollama', url, model, examples }
+    });
+    showResult(result, result.usedLlm);
+    showWarnings(result.warnings || []);
+    document.getElementById('mode-pill').textContent =
+      result.usedLlm ? 'AI-improved' : 'AI unavailable — Tier 1 result';
+  } catch (err) {
+    document.getElementById('mode-pill').textContent = 'AI error';
+    console.error('runAi error:', err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#10022; Improve with AI';
   }
 }
 
@@ -538,6 +717,10 @@ function clear_() {
     '<div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see text</p></div>';
   document.getElementById('out-svg').innerHTML =
     '<div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see diagram</p></div>';
+  showWarnings([]);
+  document.getElementById('ai-badge').classList.remove('visible');
+  document.getElementById('save-correction').classList.remove('visible');
+  _lastInput = '';
 }
 
 function showErr(msg) {

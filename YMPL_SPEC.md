@@ -1,6 +1,6 @@
 # YMPL — YAML Markup for Process Language
 ## Specification · Version 1.0
-## Date: 2026-03-31
+## Date: 2026-04-01
 
 ---
 
@@ -76,16 +76,16 @@ meta: Meta                      # optional — provenance and confidence
 
 | Kind | Description | Typical examples |
 |---|---|---|
-| `vessel` | Pressure vessels, tanks, drums, separators, accumulators | Flash drum, feed tank, overhead accumulator, ko drum |
-| `pump` | Centrifugal, reciprocating, dosing, gear pumps | P-101, centrifugal pump, mag-drive pump |
-| `valve` | Control valves, isolation valves, block valves | CV-101, gate valve, ball valve, dbb valve |
-| `checkvalve` | Non-return valves, backflow preventers | NRV, check valve, swing check |
-| `heat_exchanger` | Shell & tube, plate, air coolers, reboilers, condensers | E-101, trim cooler, fin-fan cooler, reboiler |
-| `compressor` | Centrifugal, reciprocating, screw compressors, blowers | K-101, blower, recip compressor |
+| `vessel` | Pressure vessels, tanks, drums, separators, slug catchers, hot wells | Flash drum, feed tank, overhead accumulator, ko drum, slug catcher, day tank |
+| `pump` | Centrifugal, reciprocating, dosing, gear, diaphragm, multistage pumps | P-101, centrifugal pump, mag-drive pump, reflux pump, charge pump |
+| `valve` | Control, isolation, block, MOV, anti-surge, blowdown, spectacle blind, BPR | CV-101, gate valve, ball valve, dbb valve, anti-surge valve, back pressure regulator |
+| `checkvalve` | Non-return valves, backflow preventers, wafer and dual-disc types | NRV, check valve, swing check, wafer check |
+| `heat_exchanger` | Shell & tube, plate, air coolers, reboilers, condensers, fired heaters, furnaces | E-101, trim cooler, fin-fan cooler, reboiler, fired heater, furnace |
+| `compressor` | Centrifugal, reciprocating, screw compressors, blowers, gas expanders | K-101, blower, recip compressor, recycle compressor, gas expander |
 | `column` | Distillation, absorption, stripping columns | C-101, fractionator, absorber |
 | `reactor` | Fixed bed, CSTR, PFR, batch reactors | R-101, reactor, cstr |
 | `relief` | PSVs, rupture discs, conservation vents | PSV-101, rupture disc, p/v valve |
-| `filter` | Strainers, coalescers, mist eliminators | Strainer, coalescer |
+| `filter` | Strainers, coalescers, mist eliminators, bag and cartridge filters | Strainer, coalescer, basket strainer, y-strainer, bag filter |
 | `meter` | Flow meters, orifice plates, Coriolis meters | FT-101, orifice plate |
 | `unknown` | Equipment that cannot be classified | Use only when kind cannot be determined |
 
@@ -238,7 +238,62 @@ meta:
 
 ---
 
-## 13. Validation rules
+## 13. Codec render API
+
+The reference implementation (`ympl.js`) exposes two render functions.
+
+### `YMPL.render(input)` — synchronous
+
+Accepts messy text or a YMPL YAML string. Returns:
+
+```js
+{
+  doc:      Object,    // parsed YMPL document { schema_version, id, title, nodes, edges, meta }
+  yaml:     string,    // YMPL 1.0 YAML string
+  svg:      string,    // SVG diagram string
+  text:     string,    // plain English description
+  warnings: string[]   // parse-quality signals (see §13a)
+}
+```
+
+### `YMPL.renderAsync(input, options)` — async, LLM-assisted
+
+Same as `render()`, plus an optional LLM call when the caller explicitly requests it.
+
+```js
+const result = await YMPL.renderAsync(text, {
+  llm: {
+    provider: 'ollama',              // 'ollama' | 'haiku'
+    url:      'http://localhost:11434',
+    model:    'llama3.2:1b',
+    examples: [{ input, yaml }]      // optional few-shot corrections (see §13b)
+  }
+});
+// result.usedLlm === true if LLM was called and succeeded
+```
+
+The LLM is called **only when explicitly triggered** (i.e. `options.llm` is provided). There is no automatic trigger. If the LLM fails, the synchronous Tier 1 result is returned and `usedLlm` is `false`.
+
+### §13a — Warnings
+
+`warnings[]` contains human-readable strings when the parser detects potential topology gaps:
+
+| Warning | Meaning |
+|---|---|
+| `bypass keyword detected but no bypass edge built` | Text mentions "bypass/parallel path" but no bypass edge was created |
+| `recycle keyword detected but no recycle edge built` | Text mentions "recycle/recirculation" but no recycle edge was created |
+| `multiple nodes found but no stream edges` | Nodes identified but no connections inferred |
+| `node X is isolated` | A node has no edges connecting it to the rest of the flow |
+
+Warnings are only produced for text input (not YAML input). Use them to decide whether to invoke `renderAsync` for LLM improvement.
+
+### §13b — Few-shot corrections (learning)
+
+Pass `examples` in the LLM config to inject past corrections as few-shot context into the LLM prompt. Each entry is `{ input: string, yaml: string }` — the original text and the corrected YAML. Up to 5 most recent examples are used. This allows the LLM to match the user's naming conventions and domain vocabulary over time.
+
+---
+
+## 14. Validation rules
 
 | Rule | Severity | Check |
 |---|---|---|
@@ -259,7 +314,7 @@ meta:
 
 ---
 
-## 14. Versioning
+## 15. Versioning
 
 - This document describes `ympl-1.0`.
 - The `schema_version` field carries the version.
@@ -268,7 +323,7 @@ meta:
 
 ---
 
-## 15. Relationship to other formats
+## 16. Relationship to other formats
 
 | Format | Relationship |
 |---|---|
@@ -278,7 +333,7 @@ meta:
 
 ---
 
-## 16. Files
+## 17. Files
 
 | File | Purpose |
 |---|---|

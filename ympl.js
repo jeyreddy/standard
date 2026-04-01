@@ -69,6 +69,9 @@
       // scrubbers & contactors
       'suction scrubber', 'gas scrubber', 'wash vessel', 'wash column',
       'quench tower', 'contactor',
+      // specialty
+      'slug catcher', 'blowdown drum', 'buffer vessel',
+      'hot well', 'day tank', 'slop tank', 'seal pot', 'weigh tank',
       // generic
       'process vessel', 'closed vessel', 'pressure container',
       'ko drum', 'flash drum', 'surge drum',
@@ -95,6 +98,8 @@
       'proportioning pump', 'injection pump', 'dosing pump',
       'centrifugal pump', 'reciprocating pump', 'rotodynamic pump',
       'single-stage pump', 'end-suction pump', 'volute pump',
+      'multistage pump', 'diaphragm pump', 'canned motor pump',
+      'reflux pump', 'charge pump', 'duty pump',
       'gear pump', 'metering pump', 'booster pump', 'transfer pump',
       'process pump', 'operating pump', 'running pump', 'online pump',
       'service pump', 'spare pump', 'backup pump', 'reserve pump',
@@ -106,6 +111,7 @@
       'centrifugal compressor', 'api 618 compressor', 'api 617 compressor',
       'screw compressor', 'piston compressor', 'recip compressor',
       'dynamic compressor', 'radial compressor', 'turbocompressor',
+      'recycle compressor', 'gas expander',
       'turboexpander', 'expander', 'blower', 'fan', 'recip', 'compressor',
     ],
     heat_exchanger: [
@@ -137,6 +143,15 @@
       'flue gas boiler', 'steam generator', 'hrsg', 'whb',
       // interstage
       'inter-stage heat exchanger', 'interstage cooler', 'intercooler', 'stage cooler',
+      // fired heaters / furnaces
+      'direct-fired heater', 'process furnace', 'fired heater', 'box heater',
+      'tube still', 'furnace', 'process heater',
+      // air-cooled types
+      'air-cooled heat exchanger', 'air-cooled hx', 'air-cooled condenser', 'fin-fan condenser',
+      // double-pipe / u-tube
+      'double-pipe heat exchanger', 'hairpin heat exchanger', 'hairpin exchanger', 'u-tube bundle',
+      // waste heat
+      'waste heat boiler',
       // vaporisers & heaters
       'feed vaporizer', 'liquid vaporizer', 'feed preheater', 'preheater',
       'economizer', 'evaporator', 'chiller', 'heater', 'cooler',
@@ -160,6 +175,20 @@
       'flow throttle valve', 'process control valve', 'final control element',
       'modulating valve', 'smart positioner', 'back-pressure valve',
       'pressure reducing valve', 'flow regulator', 'lcv', 'pcv', 'fcv',
+      // anti-surge
+      'anti-surge recycle valve', 'anti-surge valve', 'surge control valve', 'compressor bypass valve',
+      // blowdown / depressuring
+      'emergency blowdown valve', 'depressuring valve', 'blowdown valve', 'dump valve',
+      // remote-operated
+      'motor operated valve', 'electrically operated valve', 'motorized valve', 'electric motor valve',
+      'pneumatic operated valve',
+      'hand operated valve', 'local manual valve', 'manual isolation valve', 'manual valve', 'hand valve',
+      // mechanical isolation
+      'spectacle blind', 'figure-8 blind', 'paddle blind', 'spec blind',
+      // body types
+      'diaphragm valve', 'plug valve', 'angle valve',
+      // back pressure
+      'back pressure regulator', 'bpr',
       // safety & relief type valves (non-relief-device)
       'safety relief valve', 'pressure relief valve',
       // generic
@@ -168,6 +197,7 @@
       'needle valve', 'pressure regulator', 'control valve', 'valve',
     ],
     checkvalve: [
+      'dual disc check valve', 'dual-disc check', 'wafer check valve', 'wafer check',
       'non-return valve', 'backflow preventer', 'one-way valve',
       'swing check', 'lift check', 'check valve', 'nrv',
     ],
@@ -182,6 +212,8 @@
       'srv', 'psv', 'rd',
     ],
     filter: [
+      'activated carbon filter', 'cartridge filter', 'bag filter',
+      'duplex strainer', 'basket strainer', 'y-strainer',
       'mist eliminator', 'coalescer', 'strainer', 'filter',
     ],
     meter: [
@@ -1037,20 +1069,20 @@ ${nodeSvg}
     '',
   ].join('\n');
 
-  async function _callOllama(text, cfg) {
+  async function _callOllama(text, cfg, prompt) {
     const base  = (cfg.url  || 'http://localhost:11434').replace(/\/$/, '');
     const model = cfg.model || 'llama3.2:1b';
     const res = await fetch(base + '/api/generate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ model, prompt: _LLM_PROMPT + text, stream: false }),
+      body:    JSON.stringify({ model, prompt: (prompt || _LLM_PROMPT) + text, stream: false }),
     });
     if (!res.ok) throw new Error('Ollama HTTP ' + res.status);
     const data = await res.json();
     return data.response || '';
   }
 
-  async function _callHaiku(text, cfg) {
+  async function _callHaiku(text, cfg, prompt) {
     if (!cfg.apiKey) throw new Error('haiku provider requires apiKey');
     const model = cfg.model || 'claude-haiku-4-5-20251001';
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1063,7 +1095,7 @@ ${nodeSvg}
       body: JSON.stringify({
         model,
         max_tokens: 1024,
-        messages: [{ role: 'user', content: _LLM_PROMPT + text }],
+        messages: [{ role: 'user', content: (prompt || _LLM_PROMPT) + text }],
       }),
     });
     if (!res.ok) {
@@ -1074,11 +1106,23 @@ ${nodeSvg}
     return (data.content && data.content[0] && data.content[0].text) || '';
   }
 
-  async function _llmExtract(text, cfg) {
+  // Build a prompt that prepends user-saved correction examples as few-shot context.
+  // examples: [{ input: string, yaml: string }, ...]  (up to 5, newest-last)
+  function _buildPrompt(examples) {
+    if (!examples || examples.length === 0) return _LLM_PROMPT;
+    const shots = examples.slice(-5).map(function(e) {
+      return 'Input: ' + e.input + '\nOutput:\n' + e.yaml;
+    }).join('\n\n---\n\n');
+    return 'Correction examples from this user (apply the same style):\n\n' +
+           shots + '\n\n---\n\n' + _LLM_PROMPT;
+  }
+
+  async function _llmExtract(text, cfg, examples) {
+    const prompt = _buildPrompt(examples);
     try {
       let raw;
-      if      (cfg.provider === 'ollama') raw = await _callOllama(text, cfg);
-      else if (cfg.provider === 'haiku')  raw = await _callHaiku(text, cfg);
+      if      (cfg.provider === 'ollama') raw = await _callOllama(text, cfg, prompt);
+      else if (cfg.provider === 'haiku')  raw = await _callHaiku(text, cfg, prompt);
       else return null;
       // Strip markdown fences if the LLM added them
       raw = raw.trim().replace(/^```(?:yaml)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1119,12 +1163,11 @@ ${nodeSvg}
     checkWarnings,
 
     /**
-     * Async render with optional LLM fallback (Tier 3).
+     * Async render with explicit LLM invocation (Tier 3).
      *
-     * Triggers LLM when Tier 1 result has:
-     *   - confidence 'low' or 'none'  (few nodes found), OR
-     *   - warnings about missing bypass/recycle edges or disconnected nodes
-     *     (nodes found correctly but topology incomplete)
+     * Call this only when the user explicitly requests AI improvement
+     * (e.g. warning bar button or Ctrl+Shift+Enter). LLM is always called
+     * when options.llm is provided — no automatic confidence-based trigger.
      *
      * options.llm — one of:
      *   { provider: 'ollama', model: 'llama3.2:1b', url: 'http://localhost:11434' }
@@ -1137,25 +1180,15 @@ ${nodeSvg}
       const result = _render(input);
       if (!options || !options.llm) return { ...result, usedLlm: false };
 
-      const conf = result.doc.meta && result.doc.meta.confidence;
-      // Actionable warnings = edge-topology gaps that an LLM can fix
-      const actionable = result.warnings.filter(w =>
-        w.includes('bypass keyword') ||
-        w.includes('recycle keyword') ||
-        w.includes('no stream edges') ||
-        w.includes('isolated node')
-      );
-      const needsLlm = conf === 'low' || conf === 'none' || actionable.length > 0;
-      if (!needsLlm) return { ...result, usedLlm: false };
-
-      const rawYaml = await _llmExtract(String(input || '').trim(), options.llm);
-      if (!rawYaml) return { ...result, usedLlm: false };  // LLM failed — return Tier 1
+      // User explicitly triggered — always call LLM; degrade gracefully on failure
+      const rawYaml = await _llmExtract(String(input || '').trim(), options.llm, options.llm.examples);
+      if (!rawYaml) return { ...result, usedLlm: false };
 
       try {
         const llmResult = _render(rawYaml);
         return { ...llmResult, usedLlm: true };
       } catch (_) {
-        return { ...result, usedLlm: false };  // LLM returned invalid YAML — degrade
+        return { ...result, usedLlm: false };
       }
     },
   };
