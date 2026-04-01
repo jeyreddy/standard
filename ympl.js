@@ -852,6 +852,7 @@
   };
 
   const NW = 128, NH = 48, HGAP = 52, PAD = 28;
+  const ROW_SIZE = 4, ROW_GAP = 64, TOP_PAD = 44;
 
   function toSvg(doc) {
     const nodes = doc.nodes || [];
@@ -864,7 +865,7 @@
       </svg>`;
     }
 
-    // ── Layout: main path row ──
+    // ── Layout: row-wrapped grid (ROW_SIZE nodes per row) ──
     const streamEdges = edges.filter(e => !e.kind || e.kind === 'stream');
     const inDeg = new Set(streamEdges.map(e => e.to));
     const startNode = nodes.find(n => !inDeg.has(n.id)) || nodes[0];
@@ -883,16 +884,19 @@
       seenPath.add(nextId);
       cur = next;
     }
-    // Any nodes not in main path appended at end
     for (const n of nodes) { if (!seenPath.has(n.id)) mainPath.push(n); }
 
     const pos = {};
     mainPath.forEach((n, i) => {
-      pos[n.id] = { x: PAD + i * (NW + HGAP), y: 56 };
+      const row = Math.floor(i / ROW_SIZE);
+      const col = i % ROW_SIZE;
+      pos[n.id] = { x: PAD + col * (NW + HGAP), y: TOP_PAD + row * (NH + ROW_GAP) };
     });
 
-    const svgW = PAD + mainPath.length * (NW + HGAP) - HGAP + PAD;
-    const svgH = 56 + NH + PAD + 12;
+    const numCols = Math.min(mainPath.length, ROW_SIZE);
+    const numRows = Math.ceil(mainPath.length / ROW_SIZE);
+    const svgW = PAD + numCols * (NW + HGAP) - HGAP + PAD + 24; // +24 for elbow right margin
+    const svgH = TOP_PAD + numRows * (NH + ROW_GAP) - ROW_GAP + PAD;
 
     // ── Edge SVG ──
     let edgeSvg = '';
@@ -905,8 +909,13 @@
       const x1 = fp.x + NW, y1 = fp.y + NH / 2;
       const x2 = tp.x,      y2 = tp.y + NH / 2;
 
-      if ((!e.kind || e.kind === 'stream') && fp.x < tp.x) {
+      if ((!e.kind || e.kind === 'stream') && fp.y === tp.y && fp.x < tp.x) {
+        // Same row — straight arrow
         edgeSvg += `<line x1="${x1}" y1="${y1}" x2="${x2 - 1}" y2="${y2}" stroke="#484f58" stroke-width="2" marker-end="url(#arr)"/>`;
+      } else if ((!e.kind || e.kind === 'stream') && fp.y < tp.y) {
+        // Row break — elbow: right → down → left into next row
+        const elbowX = svgW - PAD;
+        edgeSvg += `<path d="M${x1},${y1} L${elbowX},${y1} L${elbowX},${y2} L${x2},${y2}" fill="none" stroke="#484f58" stroke-width="2" marker-end="url(#arr)"/>`;
       } else if (e.kind === 'bypass') {
         const mx = (fp.x + NW + tp.x) / 2;
         const ay = fp.y - 26;

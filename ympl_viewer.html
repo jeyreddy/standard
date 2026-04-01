@@ -167,8 +167,10 @@ textarea::placeholder{color:var(--muted);opacity:.4;}
 #ai-settings input{background:var(--s2);border:1px solid var(--border);color:var(--text);
   border-radius:3px;padding:3px 7px;font-size:11px;font-family:var(--mono);outline:none;}
 #ai-settings input:focus{border-color:var(--accent);}
-#ai-settings input.url{width:190px;}
-#ai-settings input.model{width:130px;}
+#ai-settings input.url{width:175px;}
+#ai-settings input.model{width:115px;}
+#ollama-dot{font-size:13px;cursor:default;line-height:1;}
+#ollama-dot[title]{cursor:help;}
 
 /* ── AI badge in tab bar ── */
 #ai-badge{display:none;margin-left:auto;font-size:10px;
@@ -316,10 +318,12 @@ Ctrl+Enter to parse."></textarea>
 
     <!-- AI settings — toggle with ⚙ AI button -->
     <div id="ai-settings">
+      <span id="ollama-dot" style="color:var(--muted)" title="Status unknown">●</span>
       <label>Ollama URL</label>
-      <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()"/>
+      <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()" onblur="checkOllamaStatus()"/>
       <label>Model</label>
       <input id="ollama-model" class="model" placeholder="llama3.2:1b" oninput="saveAiSettings()"/>
+      <button class="btn-sm" onclick="checkOllamaStatus()" style="padding:3px 8px">Ping</button>
     </div>
   </div>
 
@@ -570,6 +574,30 @@ function saveAiSettings() {
 }
 function toggleAiSettings() {
   document.getElementById('ai-settings').classList.toggle('open');
+  // Check Ollama status whenever panel is opened
+  if (document.getElementById('ai-settings').classList.contains('open')) checkOllamaStatus();
+}
+
+async function pingOllama(url) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const r = await fetch(url.replace(/\/$/, '') + '/api/tags', { signal: ctrl.signal });
+    clearTimeout(t);
+    return r.ok;
+  } catch (_) { clearTimeout(t); return false; }
+}
+
+async function checkOllamaStatus() {
+  const url = (document.getElementById('ollama-url').value.trim() || 'http://localhost:11434');
+  const dot = document.getElementById('ollama-dot');
+  dot.style.color = 'var(--muted)';
+  dot.title = 'Checking…';
+  const ok = await pingOllama(url);
+  dot.style.color = ok ? 'var(--green)' : 'var(--red)';
+  dot.title = ok
+    ? 'Ollama is running ✓'
+    : 'Ollama not reachable — start it: ollama serve';
 }
 loadAiSettings();
 
@@ -668,8 +696,15 @@ async function run() {
       const examples = loadCorrections();
       document.getElementById('mode-pill').textContent = 'Ollama…';
       result = await YMPL.renderAsync(raw, { llm: { provider: 'ollama', url: ollamaUrl, model, examples } });
-      document.getElementById('mode-pill').textContent =
-        result.usedLlm ? 'Ollama → diagram' : 'Tier 1 (Ollama unavailable)';
+      if (result.usedLlm) {
+        document.getElementById('mode-pill').textContent = 'Ollama → diagram';
+        document.getElementById('ollama-dot').style.color = 'var(--green)';
+        document.getElementById('ollama-dot').title = 'Ollama is running ✓';
+      } else {
+        document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
+        document.getElementById('ollama-dot').style.color = 'var(--red)';
+        document.getElementById('ollama-dot').title = 'Ollama not reachable — start it: ollama serve';
+      }
     } else {
       document.getElementById('mode-pill').textContent =
         isYml ? 'YAML → text + diagram' : 'text → YAML + diagram';
@@ -708,9 +743,18 @@ async function runAi() {
       llm: { provider: 'ollama', url, model, examples }
     });
     showResult(result, result.usedLlm);
-    showWarnings(result.warnings || []);
-    document.getElementById('mode-pill').textContent =
-      result.usedLlm ? 'AI-improved' : 'AI unavailable — Tier 1 result';
+    showWarnings(result.usedLlm ? [] : (result.warnings || []));
+    if (result.usedLlm) {
+      document.getElementById('mode-pill').textContent = 'Ollama → diagram';
+      document.getElementById('ollama-dot').style.color = 'var(--green)';
+      document.getElementById('ollama-dot').title = 'Ollama is running ✓';
+    } else {
+      const url = document.getElementById('ollama-url').value.trim() || 'http://localhost:11434';
+      document.getElementById('mode-pill').textContent = 'Ollama unavailable — showing Tier 1 result';
+      document.getElementById('ollama-dot').style.color = 'var(--red)';
+      document.getElementById('ollama-dot').title = 'Ollama not reachable — start it: ollama serve';
+      showWarnings([`Ollama not running at ${url} — start it with: ollama serve`]);
+    }
   } catch (err) {
     document.getElementById('mode-pill').textContent = 'AI error';
     console.error('runAi error:', err);
