@@ -322,7 +322,7 @@ Ctrl+Enter to parse."></textarea>
       <label>Ollama URL</label>
       <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()" onblur="checkOllamaStatus()"/>
       <label>Model</label>
-      <input id="ollama-model" class="model" placeholder="llama3.2:1b" oninput="saveAiSettings()"/>
+      <input id="ollama-model" class="model" placeholder="llama3.2:3b" oninput="saveAiSettings()"/>
       <button class="btn-sm" onclick="checkOllamaStatus()" style="padding:3px 8px">Ping</button>
     </div>
   </div>
@@ -578,26 +578,55 @@ function toggleAiSettings() {
   if (document.getElementById('ai-settings').classList.contains('open')) checkOllamaStatus();
 }
 
-async function pingOllama(url) {
+// Returns { up: bool, models: string[] }
+async function queryOllama(url) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 4000);
+  const t = setTimeout(() => ctrl.abort(), 5000);
   try {
     const r = await fetch(url.replace(/\/$/, '') + '/api/tags', { signal: ctrl.signal });
     clearTimeout(t);
-    return r.ok;
-  } catch (_) { clearTimeout(t); return false; }
+    if (!r.ok) return { up: false, models: [] };
+    const data = await r.json();
+    return { up: true, models: (data.models || []).map(m => m.name) };
+  } catch (_) { clearTimeout(t); return { up: false, models: [] }; }
+}
+
+async function pingOllama(url) {
+  return (await queryOllama(url)).up;
+}
+
+function setDot(color, title) {
+  const dot = document.getElementById('ollama-dot');
+  dot.style.color = color;
+  dot.title = title;
 }
 
 async function checkOllamaStatus() {
-  const url = (document.getElementById('ollama-url').value.trim() || 'http://localhost:11434');
-  const dot = document.getElementById('ollama-dot');
-  dot.style.color = 'var(--muted)';
-  dot.title = 'Checking…';
-  const ok = await pingOllama(url);
-  dot.style.color = ok ? 'var(--green)' : 'var(--red)';
-  dot.title = ok
-    ? 'Ollama is running ✓'
-    : 'Ollama not reachable — start it: ollama serve';
+  const url   = (document.getElementById('ollama-url').value.trim()   || 'http://localhost:11434');
+  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:3b');
+  setDot('var(--muted)', 'Checking…');
+
+  const { up, models } = await queryOllama(url);
+  if (!up) {
+    setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
+    return;
+  }
+  // Ollama is up — check if the configured model is installed
+  const base  = model.split(':')[0];
+  const found = models.find(m => m === model || m.startsWith(base + ':'));
+  if (found) {
+    setDot('var(--green)', 'Ollama running ✓   model: ' + found);
+  } else {
+    const avail = models.length ? models.slice(0, 3).join(', ') : 'none installed';
+    setDot('var(--orange)',
+      'Ollama running but model "' + model + '" not installed.\n' +
+      'Available: ' + avail + '\n' +
+      'Fix: ollama pull ' + model);
+    showWarnings([
+      'Model "' + model + '" not found in Ollama — run: ollama pull ' + model +
+      (models.length ? '   (installed: ' + models.slice(0, 3).join(', ') + ')' : '')
+    ]);
+  }
 }
 loadAiSettings();
 
@@ -692,18 +721,27 @@ async function run() {
   let result;
   try {
     if (useOllama) {
-      const model    = (localStorage.getItem('ympl_ollama_model') || 'llama3.2:1b').trim();
+      const model    = (localStorage.getItem('ympl_ollama_model') || 'llama3.2:3b').trim();
       const examples = loadCorrections();
       document.getElementById('mode-pill').textContent = 'Ollama…';
       result = await YMPL.renderAsync(raw, { llm: { provider: 'ollama', url: ollamaUrl, model, examples } });
       if (result.usedLlm) {
         document.getElementById('mode-pill').textContent = 'Ollama → diagram';
-        document.getElementById('ollama-dot').style.color = 'var(--green)';
-        document.getElementById('ollama-dot').title = 'Ollama is running ✓';
+        setDot('var(--green)', 'Ollama running ✓   model: ' + model);
       } else {
-        document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
-        document.getElementById('ollama-dot').style.color = 'var(--red)';
-        document.getElementById('ollama-dot').title = 'Ollama not reachable — start it: ollama serve';
+        // LLM call failed — find out why
+        const { up } = await queryOllama(ollamaUrl);
+        if (up) {
+          document.getElementById('mode-pill').textContent = 'Model output invalid — Tier 1 result';
+          setDot('var(--orange)',
+            'Ollama is running but "' + model + '" returned invalid output.\n' +
+            'Try a larger model: ollama pull llama3.2:3b\nOr check: ollama list');
+          showWarnings(['Model "' + model + '" returned invalid YAML — try: ollama pull llama3.2:3b']);
+        } else {
+          document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
+          setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
+          showWarnings(['Ollama not running at ' + ollamaUrl + ' — start it: ollama serve']);
+        }
       }
     } else {
       document.getElementById('mode-pill').textContent =
@@ -730,7 +768,7 @@ async function runAi() {
   if (!raw) return;
 
   const url   = (document.getElementById('ollama-url').value.trim()   || 'http://localhost:11434');
-  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:1b');
+  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:3b');
 
   const btn = document.getElementById('ai-btn');
   btn.disabled = true;
@@ -746,14 +784,20 @@ async function runAi() {
     showWarnings(result.usedLlm ? [] : (result.warnings || []));
     if (result.usedLlm) {
       document.getElementById('mode-pill').textContent = 'Ollama → diagram';
-      document.getElementById('ollama-dot').style.color = 'var(--green)';
-      document.getElementById('ollama-dot').title = 'Ollama is running ✓';
+      setDot('var(--green)', 'Ollama running ✓   model: ' + model);
     } else {
-      const url = document.getElementById('ollama-url').value.trim() || 'http://localhost:11434';
-      document.getElementById('mode-pill').textContent = 'Ollama unavailable — showing Tier 1 result';
-      document.getElementById('ollama-dot').style.color = 'var(--red)';
-      document.getElementById('ollama-dot').title = 'Ollama not reachable — start it: ollama serve';
-      showWarnings([`Ollama not running at ${url} — start it with: ollama serve`]);
+      const { up } = await queryOllama(url);
+      if (up) {
+        document.getElementById('mode-pill').textContent = 'Model output invalid — Tier 1 result';
+        setDot('var(--orange)',
+          'Ollama is running but "' + model + '" returned invalid output.\n' +
+          'Try: ollama pull llama3.2:3b');
+        showWarnings(['Model "' + model + '" returned invalid YAML — try a larger model: ollama pull llama3.2:3b']);
+      } else {
+        document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
+        setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
+        showWarnings(['Ollama not running at ' + url + ' — start it: ollama serve']);
+      }
     }
   } catch (err) {
     document.getElementById('mode-pill').textContent = 'AI error';
