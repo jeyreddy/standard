@@ -697,10 +697,34 @@
 
   // ─── PARSE ─────────────────────────────────────────────────────────────────
 
+  // Remove bare single-word back-references to equipment already found.
+  // e.g. "Single Tube Reactor … the reactor effluent" → "Reactor" is removed
+  // because it is a bare back-reference to the earlier "Single Tube Reactor".
+  // Multi-word labels are never removed — two "Flash Drum" nodes are kept.
+  function deduplicateNodes(nodes) {
+    const result = [];
+    for (const n of nodes) {
+      if (n.label.indexOf(' ') === -1) {   // single-word label only
+        const lc = n.label.toLowerCase();
+        const isDup = result.some(prev =>
+          prev.kind === n.kind &&
+          prev.label !== n.label &&
+          prev.label.toLowerCase().includes(lc)
+        );
+        if (isDup) continue;
+      }
+      result.push(n);
+    }
+    return result;
+  }
+
   function parse(text) {
     const sourceText  = String(text || '').trim();
     const normalized  = normalize(sourceText);
     let   nodes       = extractNodes(normalized);
+
+    // Remove bare back-references before reordering (e.g. "reactor" after "tube reactor")
+    nodes = deduplicateNodes(nodes);
 
     // Reorder nodes so flow order matches actual process direction
     nodes = reorderNodes(nodes, normalized);
