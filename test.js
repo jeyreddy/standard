@@ -35,7 +35,7 @@ console.log('\n── Text → YAML + SVG ────────────�
 {
   const r = YMPL.render('flash drum through trim cooler to product tank');
   check('simple 3-node: node count', r.doc.nodes.length, 3);
-  check('simple 3-node: kinds', r.doc.nodes.map(n=>n.kind).join(','), 'vessel,heat_exchanger,vessel');
+  check('simple 3-node: kinds', r.doc.nodes.map(n=>n.kind).join(','), 'separator,heat_exchanger,vessel');
   checkIncludes('simple 3-node: text', r.text, 'Flash Drum → Trim Cooler → Product Tank');
   checkIncludes('simple 3-node: svg', r.svg, '<svg');
   checkIncludes('simple 3-node: yaml', r.yaml, 'schema_version: ympl-1.0');

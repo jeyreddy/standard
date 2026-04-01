@@ -117,7 +117,8 @@ textarea::placeholder{color:var(--muted);opacity:.4;}
 
 /* Diagram pane */
 #out-svg{flex:1;overflow:auto;padding:14px;
-  display:flex;align-items:flex-start;justify-content:flex-start;}
+  display:block;}
+#out-svg svg{display:block;}
 
 /* Help pane */
 .help{flex:1;overflow-y:auto;padding:16px;font-size:12px;line-height:1.7;}
@@ -169,8 +170,13 @@ textarea::placeholder{color:var(--muted);opacity:.4;}
 #ai-settings input:focus{border-color:var(--accent);}
 #ai-settings input.url{width:175px;}
 #ai-settings input.model{width:115px;}
+#ai-settings select{background:var(--s2);border:1px solid var(--border);color:var(--text);
+  border-radius:3px;padding:3px 7px;font-size:11px;outline:none;cursor:pointer;}
+#ai-settings select:focus{border-color:var(--accent);}
 #ollama-dot{font-size:13px;cursor:default;line-height:1;}
 #ollama-dot[title]{cursor:help;}
+.ai-section{display:flex;align-items:center;gap:6px;}
+.ai-section.hidden{display:none;}
 
 /* ── AI badge in tab bar ── */
 #ai-badge{display:none;margin-left:auto;font-size:10px;
@@ -318,13 +324,28 @@ Ctrl+Enter to parse."></textarea>
 
     <!-- AI settings — toggle with ⚙ AI button -->
     <div id="ai-settings">
-      <span id="ollama-dot" style="color:var(--muted)" title="Status unknown">●</span>
-      <label>Ollama URL</label>
-      <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()" onblur="checkOllamaStatus()"/>
-      <label>Model</label>
-      <input id="ollama-model" class="model" placeholder="llama3.2:3b" list="model-list" oninput="saveAiSettings()"/>
-      <datalist id="model-list"></datalist>
-      <button class="btn-sm" onclick="checkOllamaStatus()" style="padding:3px 8px">Ping</button>
+      <label>Engine</label>
+      <select id="llm-provider" onchange="onProviderChange()">
+        <option value="off">Off (rule-based only)</option>
+        <option value="ollama">Ollama (local)</option>
+        <option value="haiku">Claude Haiku</option>
+      </select>
+
+      <span class="ai-section hidden" id="section-ollama">
+        <span id="ollama-dot" style="color:var(--muted)" title="Status unknown">●</span>
+        <label>URL</label>
+        <input id="ollama-url" class="url" placeholder="http://localhost:11434" oninput="saveAiSettings()" onblur="checkOllamaStatus()"/>
+        <label>Model</label>
+        <input id="ollama-model" class="model" placeholder="qwen2.5:3b-instruct" list="model-list" oninput="saveAiSettings()"/>
+        <datalist id="model-list"></datalist>
+        <button class="btn-sm" onclick="checkOllamaStatus()" style="padding:3px 8px">Ping</button>
+      </span>
+
+      <span class="ai-section hidden" id="section-haiku">
+        <label>API key</label>
+        <input id="haiku-key" class="url" placeholder="sk-ant-…" type="password" oninput="saveAiSettings(); updateKeyIndicator()" style="width:160px;font-family:monospace"/>
+        <span id="key-indicator" style="font-size:10px;color:var(--muted)"></span>
+      </span>
     </div>
   </div>
 
@@ -566,12 +587,36 @@ document.getElementById('inp').addEventListener('keydown', e => {
 
 // ── AI settings persistence ───────────────────────────────────────────────────
 function loadAiSettings() {
-  document.getElementById('ollama-url').value   = localStorage.getItem('ympl_ollama_url')   || '';
-  document.getElementById('ollama-model').value = localStorage.getItem('ympl_ollama_model') || '';
+  const provider = localStorage.getItem('ympl_provider') || 'off';
+  document.getElementById('llm-provider').value = provider;
+  document.getElementById('ollama-url').value   = localStorage.getItem('ympl_ollama_url') || '';
+  const savedModel = localStorage.getItem('ympl_ollama_model') || '';
+  document.getElementById('ollama-model').value = (savedModel === 'llama3.2:3b' || savedModel === 'llama3.2:1b') ? '' : savedModel;
+  document.getElementById('haiku-key').value    = localStorage.getItem('ympl_haiku_key') || '';
+  _applyProviderUI(provider);
+  updateKeyIndicator();
 }
 function saveAiSettings() {
+  localStorage.setItem('ympl_provider',     document.getElementById('llm-provider').value);
   localStorage.setItem('ympl_ollama_url',   document.getElementById('ollama-url').value.trim());
   localStorage.setItem('ympl_ollama_model', document.getElementById('ollama-model').value.trim());
+  localStorage.setItem('ympl_haiku_key',    document.getElementById('haiku-key').value.trim());
+}
+function _applyProviderUI(provider) {
+  document.getElementById('section-ollama').classList.toggle('hidden', provider !== 'ollama');
+  document.getElementById('section-haiku').classList.toggle('hidden',  provider !== 'haiku');
+}
+function updateKeyIndicator() {
+  const key = document.getElementById('haiku-key').value.trim();
+  document.getElementById('key-indicator').textContent = key ? '✓ saved' : '';
+}
+function onProviderChange() {
+  const provider = document.getElementById('llm-provider').value;
+  _applyProviderUI(provider);
+  saveAiSettings();
+  updateKeyIndicator();
+  if (provider === 'ollama') checkOllamaStatus();
+  else if (provider === 'off') setDot('var(--muted)', 'AI off');
 }
 function toggleAiSettings() {
   document.getElementById('ai-settings').classList.toggle('open');
@@ -604,7 +649,7 @@ function setDot(color, title) {
 
 async function checkOllamaStatus() {
   const url   = (document.getElementById('ollama-url').value.trim()   || 'http://localhost:11434');
-  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:3b');
+  const model = (document.getElementById('ollama-model').value.trim() || 'qwen2.5:3b-instruct');
   setDot('var(--muted)', 'Checking…');
 
   const { up, models } = await queryOllama(url);
@@ -618,29 +663,27 @@ async function checkOllamaStatus() {
     return;
   }
 
-  // If model field is empty, auto-fill with first installed model
+  // Auto-fill: if field empty OR current value not installed, pick first generative model
   const modelInput = document.getElementById('ollama-model');
-  if (!modelInput.value.trim() && models.length) {
-    modelInput.value = models[0];
+  const genModels  = models.filter(m => !m.includes('embed') && !m.includes('nomic'));
+  const current    = modelInput.value.trim();
+  const base       = current.split(':')[0];
+  const found      = models.find(m => m === current || m.startsWith(base + ':'));
+  if (!found && genModels.length) {
+    modelInput.value = genModels[0];
     saveAiSettings();
-    model = models[0];
   }
-
-  // Check if configured model is installed
-  const base  = model.split(':')[0];
-  const found = models.find(m => m === model || m.startsWith(base + ':'));
-  if (found) {
-    setDot('var(--green)', 'Ollama running ✓   model: ' + found);
+  const activeModel = modelInput.value.trim() || model;
+  const activefound = models.find(m => m === activeModel || m.startsWith(activeModel.split(':')[0] + ':'));
+  if (activefound) {
+    setDot('var(--green)', 'Ollama running ✓   model: ' + activefound);
     showWarnings([]);
   } else {
-    const avail = models.length ? models.join(', ') : 'none — run: ollama pull llama3.2:3b';
-    setDot('var(--orange)', 'Model "' + model + '" not installed.\nInstalled: ' + avail);
-    showWarnings([
-      'Model "' + model + '" not installed in Ollama.' +
-      (models.length
-        ? ' Click the model field and pick one: ' + models.join(', ')
-        : ' Run: ollama pull llama3.2:3b')
-    ]);
+    const avail = models.length ? models.join(', ') : 'none installed';
+    setDot('var(--orange)', 'Model not found.\nInstalled: ' + avail);
+    showWarnings([models.length
+      ? 'Model not installed. Available: ' + models.join(', ')
+      : 'No models installed in Ollama — run: ollama pull qwen2.5:3b-instruct']);
   }
 }
 loadAiSettings();
@@ -723,53 +766,79 @@ function showWarnings(warnings) {
   bar.classList.add('has-warnings');
 }
 
+// ── Shared LLM runner — tries Haiku, then Ollama, then Tier 1 ────────────────
+function _getLlmCfg() {
+  const provider  = localStorage.getItem('ympl_provider') || 'off';
+  const ollamaUrl = (localStorage.getItem('ympl_ollama_url')   || '').trim();
+  const model     = (localStorage.getItem('ympl_ollama_model') || 'qwen2.5:3b-instruct').trim();
+  const haikuKey  = (localStorage.getItem('ympl_haiku_key')    || '').trim();
+  if (provider === 'ollama' && ollamaUrl)
+    return { provider: 'ollama', url: ollamaUrl, model, label: 'Ollama · ' + model };
+  if (provider === 'haiku'  && haikuKey)
+    return { provider: 'haiku',  apiKey: haikuKey, url: 'http://localhost:8080/proxy/anthropic', label: 'Claude Haiku' };
+  return null;
+}
+
+async function _runWithLlm(raw) {
+  const cfg      = _getLlmCfg();
+  const examples = loadCorrections();
+  const pill     = document.getElementById('mode-pill');
+  if (!cfg) {
+    pill.textContent = 'text → YAML + diagram';
+    return { result: YMPL.render(raw), usedAi: false };
+  }
+  pill.textContent = cfg.label + '…';
+  const result = await YMPL.renderAsync(raw, { llm: { ...cfg, examples } });
+  if (result.usedLlm) {
+    pill.textContent = cfg.label + ' → diagram';
+    if (cfg.provider === 'ollama') setDot('var(--green)', 'Ollama running ✓   model: ' + cfg.model);
+  } else {
+    const errMsg  = result.llmError || '';
+    const rawText = result.llmRaw   || '';
+    if (cfg.provider === 'ollama') {
+      const { up } = await queryOllama(cfg.url);
+      pill.textContent = up ? 'Ollama: bad output — Tier 1 result' : 'Ollama unavailable — Tier 1 result';
+      if (up) {
+        setDot('var(--orange)', 'Ollama running but output invalid');
+        const warns = ['Ollama returned invalid YAML.'];
+        if (rawText) warns.push('Raw response: ' + rawText.slice(0, 300));
+        showWarnings(warns);
+      } else {
+        setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
+        showWarnings(['Ollama not running at ' + cfg.url]);
+      }
+    } else {
+      pill.textContent = 'Claude Haiku error — Tier 1 result';
+      const warns = [errMsg ? 'Haiku error: ' + errMsg : 'Claude Haiku call failed.'];
+      if (rawText) warns.push('Raw response: ' + rawText.slice(0, 300));
+      warns.push('Check: API key correct? serve.js restarted after last code change?');
+      showWarnings(warns);
+    }
+  }
+  return { result, usedAi: result.usedLlm };
+}
+
 // ── Main parse ────────────────────────────────────────────────────────────────
 async function run() {
   const raw = document.getElementById('inp').value.trim();
   if (!raw) return;
   _lastInput = raw;
 
-  const isYml     = /^schema_version:|^---/.test(raw);
-  const ollamaUrl = (localStorage.getItem('ympl_ollama_url') || '').trim();
-  const useOllama = !isYml && ollamaUrl;
-
-  let result;
+  const isYml = /^schema_version:|^---/.test(raw);
+  let result, usedAi = false;
   try {
-    if (useOllama) {
-      const model    = (localStorage.getItem('ympl_ollama_model') || 'llama3.2:3b').trim();
-      const examples = loadCorrections();
-      document.getElementById('mode-pill').textContent = 'Ollama…';
-      result = await YMPL.renderAsync(raw, { llm: { provider: 'ollama', url: ollamaUrl, model, examples } });
-      if (result.usedLlm) {
-        document.getElementById('mode-pill').textContent = 'Ollama → diagram';
-        setDot('var(--green)', 'Ollama running ✓   model: ' + model);
-      } else {
-        // LLM call failed — find out why
-        const { up } = await queryOllama(ollamaUrl);
-        if (up) {
-          document.getElementById('mode-pill').textContent = 'Model output invalid — Tier 1 result';
-          setDot('var(--orange)',
-            'Ollama is running but "' + model + '" returned invalid output.\n' +
-            'Try a larger model: ollama pull llama3.2:3b\nOr check: ollama list');
-          showWarnings(['Model "' + model + '" returned invalid YAML — try: ollama pull llama3.2:3b']);
-        } else {
-          document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
-          setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
-          showWarnings(['Ollama not running at ' + ollamaUrl + ' — start it: ollama serve']);
-        }
-      }
-    } else {
-      document.getElementById('mode-pill').textContent =
-        isYml ? 'YAML → text + diagram' : 'text → YAML + diagram';
+    if (isYml) {
+      document.getElementById('mode-pill').textContent = 'YAML → text + diagram';
       result = YMPL.render(raw);
+    } else {
+      ({ result, usedAi } = await _runWithLlm(raw));
     }
   } catch (err) {
     showErr(err.message); return;
   }
 
-  // Suppress sparse-parse warnings when Ollama succeeded — LLM already handled them
-  const warnings = (result.usedLlm ? [] : result.warnings) || [];
-  showResult(result, result.usedLlm || false);
+  const warnings = (usedAi ? [] : result.warnings) || [];
+  showResult(result, usedAi);
   showWarnings(warnings);
 
   if (!document.querySelector('.tab[data-tab="yaml"]').classList.contains('active')) {
@@ -782,38 +851,14 @@ async function runAi() {
   const raw = document.getElementById('inp').value.trim();
   if (!raw) return;
 
-  const url   = (document.getElementById('ollama-url').value.trim()   || 'http://localhost:11434');
-  const model = (document.getElementById('ollama-model').value.trim() || 'llama3.2:3b');
-
   const btn = document.getElementById('ai-btn');
   btn.disabled = true;
   btn.textContent = '…';
-  document.getElementById('mode-pill').textContent = 'AI improving…';
 
   try {
-    const examples = loadCorrections();
-    const result = await YMPL.renderAsync(raw, {
-      llm: { provider: 'ollama', url, model, examples }
-    });
-    showResult(result, result.usedLlm);
-    showWarnings(result.usedLlm ? [] : (result.warnings || []));
-    if (result.usedLlm) {
-      document.getElementById('mode-pill').textContent = 'Ollama → diagram';
-      setDot('var(--green)', 'Ollama running ✓   model: ' + model);
-    } else {
-      const { up } = await queryOllama(url);
-      if (up) {
-        document.getElementById('mode-pill').textContent = 'Model output invalid — Tier 1 result';
-        setDot('var(--orange)',
-          'Ollama is running but "' + model + '" returned invalid output.\n' +
-          'Try: ollama pull llama3.2:3b');
-        showWarnings(['Model "' + model + '" returned invalid YAML — try a larger model: ollama pull llama3.2:3b']);
-      } else {
-        document.getElementById('mode-pill').textContent = 'Ollama unavailable — Tier 1 result';
-        setDot('var(--red)', 'Ollama not reachable — run: ollama serve');
-        showWarnings(['Ollama not running at ' + url + ' — start it: ollama serve']);
-      }
-    }
+    const { result, usedAi } = await _runWithLlm(raw);
+    showResult(result, usedAi);
+    showWarnings(usedAi ? [] : (result.warnings || []));
   } catch (err) {
     document.getElementById('mode-pill').textContent = 'AI error';
     console.error('runAi error:', err);
