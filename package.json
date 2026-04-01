@@ -4,7 +4,8 @@
   "description": "YMPL Process Model Codec — messy text ↔ YAML + SVG diagram",
   "main": "ympl.js",
   "scripts": {
-    "test": "node test.js"
+    "test":  "node test.js",
+    "serve": "node serve.js"
   },
   "license": "Apache-2.0",
   "dependencies": {
