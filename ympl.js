@@ -90,7 +90,9 @@
     ],
     reactor: [
       'fluidised bed reactor', 'fixed bed reactor', 'plug flow reactor',
-      'tubular reactor', 'batch reactor', 'cstr', 'pfr', 'reactor',
+      'single-tube reactor', 'tube reactor', 'tubular reactor',
+      'jacketed reactor', 'stirred tank reactor', 'continuous stirred tank reactor',
+      'batch reactor', 'cstr', 'pfr', 'reactor',
     ],
     pump: [
       'hermetically sealed pump', 'magnetic drive pump', 'mag-drive pump',
@@ -273,13 +275,16 @@
     [/\bexhanger\b/gi, 'exchanger'],
     [/\bexchanger\b/gi, 'exchanger'],
     // Separators / vessels
+    [/\bseperator\b/gi, 'separator'],
     [/\bseprator\b/gi, 'separator'],
     [/\bsepartor\b/gi, 'separator'],
+    [/\bseperatr\b/gi, 'separator'],
     [/\bvesle\b/gi, 'vessel'],
     [/\bvesel\b/gi, 'vessel'],
     [/\bveseel\b/gi, 'vessel'],
     [/\bdrume\b/gi, 'drum'],
     [/\btnak\b/gi, 'tank'],
+    [/\breacter\b|\breactr\b/gi, 'reactor'],
     // Compressors / blowers
     [/\bkompressur\b/gi, 'compressor'],
     [/\bkompresr\b/gi, 'compressor'],
@@ -1014,6 +1019,17 @@ ${nodeSvg}
           w.push(`isolated node: "${n.label}" has no connections`);
         }
       }
+    }
+
+    // ── Sparse parse — long input but few nodes ────────────────────────────
+    // More than ~12 words but fewer than 1 node per 6 words usually means
+    // some equipment terms were not recognised (typos, uncommon phrasing, etc.)
+    const wordCount = sourceText.trim().split(/\s+/).length;
+    if (nodes.length > 0 && wordCount > 12 && nodes.length < Math.ceil(wordCount / 6)) {
+      w.push(
+        `only ${nodes.length} equipment term${nodes.length !== 1 ? 's' : ''} recognised from ${wordCount}-word input` +
+        ` — some terms may be unrecognised. Try AI to capture missed equipment`
+      );
     }
 
     return w;
