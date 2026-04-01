@@ -652,26 +652,38 @@ function showWarnings(warnings) {
 }
 
 // ── Main parse ────────────────────────────────────────────────────────────────
-function run() {
+async function run() {
   const raw = document.getElementById('inp').value.trim();
   if (!raw) return;
   _lastInput = raw;
 
-  const isYml = /^schema_version:|^---/.test(raw);
-  document.getElementById('mode-pill').textContent =
-    isYml ? 'YAML → text + diagram' : 'text → YAML + diagram';
+  const isYml     = /^schema_version:|^---/.test(raw);
+  const ollamaUrl = (localStorage.getItem('ympl_ollama_url') || '').trim();
+  const useOllama = !isYml && ollamaUrl;
 
   let result;
   try {
-    result = YMPL.render(raw);
+    if (useOllama) {
+      const model    = (localStorage.getItem('ympl_ollama_model') || 'llama3.2:1b').trim();
+      const examples = loadCorrections();
+      document.getElementById('mode-pill').textContent = 'Ollama…';
+      result = await YMPL.renderAsync(raw, { llm: { provider: 'ollama', url: ollamaUrl, model, examples } });
+      document.getElementById('mode-pill').textContent =
+        result.usedLlm ? 'Ollama → diagram' : 'Tier 1 (Ollama unavailable)';
+    } else {
+      document.getElementById('mode-pill').textContent =
+        isYml ? 'YAML → text + diagram' : 'text → YAML + diagram';
+      result = YMPL.render(raw);
+    }
   } catch (err) {
     showErr(err.message); return;
   }
 
-  showResult(result, false);
-  showWarnings(result.warnings || []);
+  // Suppress sparse-parse warnings when Ollama succeeded — LLM already handled them
+  const warnings = (result.usedLlm ? [] : result.warnings) || [];
+  showResult(result, result.usedLlm || false);
+  showWarnings(warnings);
 
-  // Switch to YAML tab on first parse
   if (!document.querySelector('.tab[data-tab="yaml"]').classList.contains('active')) {
     document.querySelector('.tab[data-tab="yaml"]').click();
   }

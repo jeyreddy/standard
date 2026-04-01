@@ -1179,11 +1179,11 @@ ${nodeSvg}
     checkWarnings,
 
     /**
-     * Async render with explicit LLM invocation (Tier 3).
+     * LLM-first async render.
      *
-     * Call this only when the user explicitly requests AI improvement
-     * (e.g. warning bar button or Ctrl+Shift+Enter). LLM is always called
-     * when options.llm is provided — no automatic confidence-based trigger.
+     * When options.llm is provided: tries LLM first; falls back to Tier 1
+     * (rule-based) only if the LLM is unreachable or returns invalid YAML.
+     * Without options.llm: returns the Tier 1 result immediately.
      *
      * options.llm — one of:
      *   { provider: 'ollama', model: 'llama3.2:1b', url: 'http://localhost:11434' }
@@ -1193,19 +1193,14 @@ ${nodeSvg}
      * Returns { doc, yaml, svg, text, warnings, usedLlm: boolean }
      */
     async renderAsync(input, options) {
-      const result = _render(input);
-      if (!options || !options.llm) return { ...result, usedLlm: false };
+      if (!options || !options.llm) return { ..._render(input), usedLlm: false };
 
-      // User explicitly triggered — always call LLM; degrade gracefully on failure
+      // LLM-first: try LLM → fall back to Tier 1 on any failure
       const rawYaml = await _llmExtract(String(input || '').trim(), options.llm, options.llm.examples);
-      if (!rawYaml) return { ...result, usedLlm: false };
-
-      try {
-        const llmResult = _render(rawYaml);
-        return { ...llmResult, usedLlm: true };
-      } catch (_) {
-        return { ...result, usedLlm: false };
+      if (rawYaml) {
+        try { return { ..._render(rawYaml), usedLlm: true }; } catch (_) {}
       }
+      return { ..._render(input), usedLlm: false };
     },
   };
 });
