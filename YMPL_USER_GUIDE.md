@@ -280,8 +280,9 @@ meta:
 const YMPL = require('./ympl.js');
 
 const result = YMPL.render("flash drum through trim cooler to product tank");
-console.log(result.yaml);   // YMPL 1.0 YAML
-console.log(result.text);   // "Flash Drum → Trim Cooler → Product Tank."
+console.log(result.yaml);     // YMPL 1.0 YAML
+console.log(result.text);     // "Flash Drum → Trim Cooler → Product Tank."
+console.log(result.mermaid);  // Mermaid flowchart LR string
 // result.svg  — SVG string, write to file or serve
 // result.doc  — { nodes, edges, ... } JS object
 ```
@@ -289,10 +290,11 @@ console.log(result.text);   // "Flash Drum → Trim Cooler → Product Tank."
 ### Working with the doc object directly
 
 ```js
-const doc  = YMPL.parse("feed tank through P-101 to separator");
-const yaml = YMPL.toYaml(doc);
-const svg  = YMPL.toSvg(doc);
-const text = YMPL.toText(doc);
+const doc     = YMPL.parse("feed tank through P-101 to separator");
+const yaml    = YMPL.toYaml(doc);
+const svg     = YMPL.toSvg(doc);
+const text    = YMPL.toText(doc);
+const mermaid = YMPL.toMermaid(doc);  // Mermaid flowchart LR string
 
 // Round-trip from YAML
 const doc2 = YMPL.fromYaml(yamlString);

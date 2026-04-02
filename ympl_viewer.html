@@ -355,6 +355,7 @@ Ctrl+Enter to parse."></textarea>
       <div class="tab active" data-tab="yaml">YAML</div>
       <div class="tab"        data-tab="text">Text</div>
       <div class="tab"        data-tab="svg">Diagram</div>
+      <div class="tab"        data-tab="mermaid">Mermaid</div>
       <div class="tab"        data-tab="help">Reference</div>
       <span id="ai-badge">&#10022; AI-improved</span>
       <span id="corrections-count"></span>
@@ -374,6 +375,16 @@ Ctrl+Enter to parse."></textarea>
     <div id="pane-svg" class="pane">
       <div id="out-svg">
         <div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see diagram</p></div>
+      </div>
+    </div>
+
+    <div id="pane-mermaid" class="pane">
+      <div id="out-mermaid-wrap" style="display:flex;flex-direction:column;height:100%;gap:10px;padding:14px;box-sizing:border-box;">
+        <textarea id="out-mermaid" readonly style="flex:1;font-family:monospace;font-size:12px;resize:none;border:1px solid var(--border);border-radius:4px;padding:10px;background:var(--surface);color:var(--text);" placeholder="Mermaid output will appear here…"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button onclick="copyMermaid()" style="font-size:11px;padding:4px 10px;">Copy</button>
+          <a id="mermaid-live-link" href="#" target="_blank" rel="noopener" style="font-size:11px;">Open in mermaid.live ↗</a>
+        </div>
       </div>
     </div>
 
@@ -745,6 +756,18 @@ function showResult(result, usedLlm) {
 
   document.getElementById('out-svg').innerHTML = result.svg;
 
+  // Mermaid tab
+  const mmd = result.mermaid || '';
+  document.getElementById('out-mermaid').value = mmd;
+  // Build mermaid.live deep-link (base64-encoded state)
+  try {
+    const state = JSON.stringify({ code: mmd, mermaid: { theme: 'default' }, updateEditor: true });
+    const encoded = btoa(unescape(encodeURIComponent(state)));
+    document.getElementById('mermaid-live-link').href = 'https://mermaid.live/edit#base64:' + encoded;
+  } catch(_) {
+    document.getElementById('mermaid-live-link').href = 'https://mermaid.live';
+  }
+
   // AI badge
   const badge = document.getElementById('ai-badge');
   if (usedLlm) badge.classList.add('visible');
@@ -752,6 +775,16 @@ function showResult(result, usedLlm) {
 
   // Save-correction button — visible whenever there is a result
   document.getElementById('save-correction').classList.add('visible');
+}
+
+function copyMermaid() {
+  const ta = document.getElementById('out-mermaid');
+  if (!ta.value) return;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = ta.closest('#out-mermaid-wrap').querySelector('button');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
 }
 
 function showWarnings(warnings) {

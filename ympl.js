@@ -1133,6 +1133,44 @@ ${nodeSvg}
     return w;
   }
 
+  // ─── MERMAID OUTPUT ────────────────────────────────────────────────────────
+
+  // Node shape per kind — encodes equipment type symbolically in plain text.
+  const _MERMAID_SHAPE = {
+    valve:          { open: '([', close: '])' },
+    checkvalve:     { open: '([', close: '])' },
+    reactor:        { open: '{{', close: '}}' },
+    column:         { open: '[[', close: ']]' },
+    separator:      { open: '[(', close: ')]' },
+    vessel:         { open: '[(', close: ')]' },
+    heat_exchanger: { open: '>', close: ']'   },
+    compressor:     { open: '[/', close: '/]' },
+    pump:           { open: '[\\', close: '/]'},
+    meter:          { open: '[|', close: '|]' },
+    filter:         { open: '[/', close: '/]' },
+    relief:         { open: '/[', close: ']/' },
+  };
+
+  function toMermaid(doc) {
+    const lines = ['flowchart LR'];
+    const nodes = doc.nodes || [];
+    const edges = doc.edges || [];
+
+    nodes.forEach(n => {
+      const shape = _MERMAID_SHAPE[n.kind] || { open: '[', close: ']' };
+      const safeLabel = n.label.replace(/"/g, "'");
+      lines.push(`  ${n.id}${shape.open}"${safeLabel}"${shape.close}:::${n.kind || 'unknown'}`);
+    });
+
+    edges.forEach(e => {
+      const arrow = e.kind === 'bypass' ? '-. Bypass .->' :
+                    e.kind === 'recycle' ? '-- Recycle -->' : '-->';
+      lines.push(`  ${e.from} ${arrow} ${e.to}`);
+    });
+
+    return lines.join('\n');
+  }
+
   // ─── SYNC RENDER (shared by render and renderAsync) ───────────────────────
 
   function _render(input) {
@@ -1141,7 +1179,7 @@ ${nodeSvg}
     const doc    = isYml ? fromYaml(str) : parse(str);
     // Warnings only make sense for text input (not hand-authored YAML)
     const warnings = isYml ? [] : checkWarnings(doc.nodes, doc.edges, str);
-    return { doc, yaml: toYaml(doc), svg: toSvg(doc), text: toText(doc), warnings };
+    return { doc, yaml: toYaml(doc), svg: toSvg(doc), text: toText(doc), mermaid: toMermaid(doc), warnings };
   }
 
   // ─── LLM FALLBACK (Tier 3) ─────────────────────────────────────────────────
@@ -1317,6 +1355,9 @@ ${nodeSvg}
 
     /** doc → SVG string */
     toSvg,
+
+    /** doc → Mermaid flowchart string */
+    toMermaid,
 
     /**
      * Sync render — no LLM fallback.

@@ -65,7 +65,8 @@ All 35 tests must pass before any change is considered done.
 | `toYaml(doc)` | YmplDoc → YAML string (inline fallback if no js-yaml) |
 | `toText(doc)` | YmplDoc → plain English description |
 | `toSvg(doc)` | YmplDoc → SVG string, left-to-right layout, colour by kind |
-| Public API | `parse`, `fromYaml`, `toYaml`, `toText`, `toSvg`, `render` |
+| `toMermaid(doc)` | YmplDoc → Mermaid `flowchart LR` string, shape encodes kind |
+| Public API | `parse`, `fromYaml`, `toYaml`, `toText`, `toSvg`, `toMermaid`, `render` |
 
 ### Key design rules
 
@@ -109,12 +110,13 @@ meta:
 // Browser: <script src="ympl.js"></script>  (+ js-yaml CDN before it)
 // Node.js: const YMPL = require('./ympl.js')
 
-YMPL.render(input)     // text OR yaml string → { doc, yaml, svg, text }
+YMPL.render(input)     // text OR yaml string → { doc, yaml, svg, text, mermaid }
 YMPL.parse(text)       // text → doc
 YMPL.fromYaml(str)     // yaml string → doc
 YMPL.toYaml(doc)       // doc → yaml string
 YMPL.toText(doc)       // doc → plain English
 YMPL.toSvg(doc)        // doc → SVG string
+YMPL.toMermaid(doc)    // doc → Mermaid flowchart LR string
 ```
 
 ---
@@ -152,8 +154,9 @@ Copy `ympl.js` to the target app. That is the entire deliverable.
 ```js
 // In simulation app, engineering tool, SCADA panel, CLI — same call:
 const result = YMPL.render(inputTextOrYaml);
-// result.yaml  — structured model
-// result.svg   — process diagram
-// result.text  — plain English
-// result.doc   — { nodes, edges } object
+// result.yaml    — structured model
+// result.svg     — process diagram (SVG string)
+// result.text    — plain English
+// result.mermaid — Mermaid flowchart LR string (SDK-to-SDK / docs)
+// result.doc     — { nodes, edges } object
 ```
