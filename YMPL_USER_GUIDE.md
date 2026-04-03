@@ -57,7 +57,8 @@ Open `ympl_viewer.html` in any browser (Chrome, Edge, Firefox). No server needed
 |---|---|
 | **YAML** | Generated YMPL 1.0 YAML — editable directly in the tab |
 | **Text** | Plain English description of the process flow |
-| **Diagram** | SVG process flow diagram |
+| **Diagram** | SVG P&ID diagram with ISA 5.1 / ISO 10628 symbols |
+| **Mermaid** | Mermaid `flowchart LR` string — copy or open in mermaid.live |
 | **Reference** | Full schema, vocabulary, and API reference |
 
 ---
@@ -111,6 +112,12 @@ tank 1 feeds P-101 through CV-101 to separator V-201, bypass around CV-101
 ```
 suction drum to compressor K-101 to cooler E-101 to product drum, recycle line back to suction drum
 ```
+```
+FT-101 → FIC-101 → CV-101 → R-101 → PT-102 → PIC-102 → PSH-102
+```
+```
+orifice plate FE-201 → dp transmitter FT-201 → flow controller FIC-201 → control valve CV-201
+```
 
 ### Mode 2 — YAML → Text + Diagram
 
@@ -155,6 +162,40 @@ meta:
 ```
 
 Output text: `Feed Tank → P-101 → CV-101 → V-201. Bypass from P-101 to V-201.`
+
+**Instrumentation loop example (YAML input):**
+
+```yaml
+schema_version: ympl-1.0
+id: flow_control_loop
+title: Flow Control Loop
+nodes:
+  - id: n1
+    label: FE-101
+    kind: element
+  - id: n2
+    label: FT-101
+    kind: transmitter
+  - id: n3
+    label: FIC-101
+    kind: controller
+  - id: n4
+    label: CV-101
+    kind: valve
+edges:
+  - from: n1
+    to: n2
+    kind: signal
+  - from: n2
+    to: n3
+    kind: signal
+  - from: n3
+    to: n4
+    kind: signal
+meta:
+  confidence: high
+  source_text: manual
+```
 
 ### Round-trip test
 
@@ -205,58 +246,65 @@ meta:
   source_text: "original input"
 ```
 
-**Node kinds:** `vessel` · `pump` · `valve` · `checkvalve` · `heat_exchanger` · `compressor` · `column` · `reactor` · `relief` · `filter` · `meter`
+**Process equipment kinds:** `vessel` · `pump` · `valve` · `checkvalve` · `heat_exchanger` · `compressor` · `column` · `reactor` · `absorber` · `adsorption` · `relief` · `filter` · `meter`
 
-**Edge kinds:** `stream` (main flow) · `bypass` · `recycle`
+**Instrumentation kinds (ISA 5.1):** `transmitter` · `controller` · `indicator` · `recorder` · `switch` · `analyzer` · `element`
+
+**Edge kinds:** `stream` (main flow) · `bypass` · `recycle` · `signal` (instrument loop)
 
 ---
 
 ## Vocabulary — what it understands
 
-### Equipment (450+ synonyms from the Process Word Bank)
+**Sources:** Process_WordBank_with_Synonyms.docx + IST_Vocabulary.docx (Lipták Vol. 1 & Yeturu/Reddy). 500+ synonyms embedded inline — no external files.
+
+### Process equipment
 
 | Kind | Recognised terms (examples) |
 |---|---|
-| vessel | tank, drum, separator, flash drum, suction drum, overhead accumulator, ko drum, slug catcher, hot well, day tank, slop tank, seal pot, blowdown drum, buffer vessel… |
-| pump | pump, centrifugal pump, dosing pump, sealless pump, mag-drive pump, diaphragm pump, multistage pump, reflux pump, charge pump, duty pump… |
-| valve | valve, control valve, gate valve, ball valve, dbb valve, esdv, anti-surge valve, blowdown valve, motor operated valve, hand operated valve, spectacle blind, back pressure regulator, bpr… |
-| checkvalve | check valve, nrv, non-return valve, backflow preventer, swing check, wafer check, dual disc check valve… |
-| heat_exchanger | heat exchanger, trim cooler, fin-fan cooler, s&t heat exchanger, reboiler, condenser, fired heater, furnace, air-cooled heat exchanger, hairpin exchanger, waste heat boiler, u-tube bundle… |
-| compressor | compressor, blower, fan, recip compressor, turbocompressor, screw compressor, recycle compressor, gas expander… |
-| column | column, fractionator, distillation column, absorber, stripper, sour water stripper… |
-| reactor | reactor, cstr, pfr, fixed bed reactor, fluidised bed reactor… |
-| relief | psv, rupture disc, conservation vent, safety valve, p/v valve… |
-| filter | strainer, coalescer, basket strainer, y-strainer, duplex strainer, bag filter, cartridge filter, mist eliminator… |
+| vessel | tank, drum, flash drum, suction drum, overhead accumulator, reflux drum, blowdown drum, slug catcher, hot well, day tank, slop tank, buffer vessel… |
+| pump | pump, centrifugal pump, diaphragm pump, metering pump, multistage pump, reflux pump, charge pump, duty pump, gear pump… |
+| valve | control valve, gate valve, ball valve, anti-surge valve, check valve, non-return valve, swing check, butterfly valve… |
+| heat_exchanger | heat exchanger, reboiler, condenser, fired heater, furnace, fin-fan, trim cooler, feed-effluent exchanger, waste heat boiler, chiller, pre-heater… |
+| compressor | centrifugal compressor, reciprocating compressor |
+| column | fractionator, distillation column, de-ethanizer, de-propanizer, azeotropic column… |
+| separator | flash drum, knockout drum, three-phase separator, scrubber, slug catcher, decanter… |
+| reactor | CSTR, plug flow reactor (PFR), tubular reactor, Gibbs reactor, jacketed reactor… |
+| absorber | absorber, stripper, liquid-liquid extractor |
+| relief | PSV, safety valve, rupture disc, conservation vent |
+| filter | strainer, coalescer, basket strainer, bag filter, mist eliminator… |
+| meter | coriolis meter, magnetic flowmeter (magmeter), vortex flowmeter, transit-time ultrasonic, positive displacement meter (PD meter, oval gear), turbine meter… |
 
-### ISA tag IDs (auto-resolved)
+### Instrumentation (ISA 5.1 / Lipták + Yeturu/Reddy)
 
-| Prefix | Kind |
-|---|---|
-| P-101 | pump |
-| CV-101, FV-101, LV-101, PV-101 | valve |
-| E-101 | heat_exchanger |
-| K-101 | compressor |
-| V-101, D-101, T-101 | vessel |
-| C-101 | column |
-| R-101 | reactor |
+| Kind | ISA tags | Recognised terms (examples) |
+|---|---|---|
+| transmitter | FT, PT, TT, LT, AT, DT, ST, WT | flow/pressure/temperature/level transmitter, GWR transmitter, guided wave radar, displacer transmitter, DP transmitter, averaging pitot transmitter… |
+| controller | FIC, PIC, TIC, LIC, AIC, FC, PC, TC, LC… | flow/pressure/temperature/level indicating controller, cascade controller, feedforward controller, split-range controller, override controller, ratio controller, PID controller… |
+| indicator | FI, PI, TI, LI, AI, FG, PG, LG… | flow/pressure/temperature/level indicator, Bourdon gauge, dial gauge, local gauge, sight glass, gauge glass, level bridle… |
+| recorder | FR, PR, TR, LR, AR | flow/pressure/temperature/level recorder, chart recorder, data recorder |
+| switch | FS/PS/TS/LS + H/L/HH/LL | flow/pressure/temperature/level switch high/low/high-high/low-low, trip switch, shutdown switch |
+| analyzer | QT, pH | gas chromatograph, pH analyzer, O2 analyzer, CO2 analyzer, moisture analyzer, online analyzer |
+| element | FE, PE, TE, LE, FM | orifice plate, averaging pitot tube (Annubar), venturi tube, thermocouple, RTD (PT100, Pt1000, resistance temperature detector), thermowell, restriction orifice, flow element |
+
+### ISA tag auto-resolution
+
+Tags like `FT-101`, `LSHH-301`, `PIC-202` are parsed automatically — no description needed. Prefix matched up to 5 characters so `LSHH`, `TSHH`, `PSLL` etc. all resolve.
 
 ### Topology keywords
 
-| Phrase | Effect in YAML |
-|---|---|
-| `bypass around X` | bypass edge from predecessor → successor of X |
-| `parallel path around X` | same as bypass |
-| `crossover around X` | same as bypass |
-| `recycle line back to X` | recycle edge from last node → X |
-| `return line to X` | same as recycle |
-| `recirculation line back to X` | same as recycle |
-| `product recycle to X` | same as recycle |
+| Phrase | Edge kind | Line style |
+|---|---|---|
+| `bypass around X`, `parallel path around X` | bypass | dashed orange |
+| `recycle line back to X`, `return line to X` | recycle | dashed green |
+| instrument → instrument or valve (auto) | signal | dashed blue |
 
-### Typo normalisation (examples)
+### Typo and field-shorthand normalisation
 
 `pumpp` → pump · `cntrol valev` → control valve · `heet exhanger` → heat exchanger ·
-`seprator` → separator · `kompressur` → compressor · `blwer` → blower ·
-`frum` → from · `thru` → through · `receeeeyycle` → recycle
+`seprator` → separator · `kompressur` → compressor · `annubar` → averaging pitot tube ·
+`magmeter` / `mag flow` → magnetic flowmeter · `PT100` / `Pt1000` → rtd ·
+`DVC` → valve positioner · `frum` → from · `thru` → through
 
 ---
 
