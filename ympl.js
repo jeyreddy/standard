@@ -110,36 +110,104 @@
       'chemical dosing tank', 'day tank', 'slop tank', 'hot well', 'sump',
       'gas cylinder', 'cylinder', 'drum', 'tank', 'vessel',
     ],
-    // Instrumentation (not in user's 8 categories but needed for process descriptions)
+    // 9. Inline measurement devices (physical, in-pipe)
     meter: [
-      'coriolis meter', 'mass flow meter', 'vortex meter', 'orifice plate',
-      'flow meter', 'flowmeter', 'meter',
+      'coriolis meter', 'mass flow meter', 'ultrasonic flow meter', 'magnetic flow meter',
+      'vortex meter', 'turbine meter', 'flow meter', 'flowmeter', 'meter',
+    ],
+    // ── ISA 5.1 Instrumentation ────────────────────────────────────────────────
+    // 10. Transmitters (field-mounted, sends 4-20 mA / digital signal)
+    transmitter: [
+      'differential pressure transmitter', 'dp transmitter',
+      'mass flow transmitter', 'flow transmitter',
+      'pressure transmitter', 'temperature transmitter',
+      'level transmitter', 'density transmitter',
+      'speed transmitter', 'vibration transmitter',
+      'transmitter',
+    ],
+    // 11. Controllers (DCS / panel — receives measurement, outputs signal)
+    controller: [
+      'flow indicating controller', 'pressure indicating controller',
+      'temperature indicating controller', 'level indicating controller',
+      'flow ratio controller', 'split-range controller', 'cascade controller',
+      'flow controller', 'pressure controller', 'temperature controller', 'level controller',
+      'pid controller', 'controller',
+    ],
+    // 12. Indicators / gauges (local read-out only, no signal output)
+    indicator: [
+      'flow indicator', 'pressure indicator', 'temperature indicator', 'level indicator',
+      'pressure gauge', 'temperature gauge', 'level gauge', 'sight glass',
+      'local indicator', 'indicator',
+    ],
+    // 13. Recorders
+    recorder: [
+      'flow recorder', 'pressure recorder', 'temperature recorder', 'level recorder',
+      'chart recorder', 'data recorder', 'recorder',
+    ],
+    // 14. Switches / trips
+    switch: [
+      'pressure switch high high', 'pressure switch low low',
+      'level switch high high', 'level switch low low',
+      'flow switch high', 'flow switch low',
+      'pressure switch high', 'pressure switch low',
+      'temperature switch high', 'temperature switch low',
+      'level switch high', 'level switch low',
+      'flow switch', 'pressure switch', 'temperature switch', 'level switch',
+      'shutdown switch', 'trip switch',
+    ],
+    // 15. Analyzers (composition / quality measurement)
+    analyzer: [
+      'gas chromatograph', 'ph analyzer', 'ph meter', 'ph probe',
+      'oxygen analyzer', 'o2 analyzer', 'co2 analyzer',
+      'moisture analyzer', 'gas analyzer', 'online analyzer',
+      'quality transmitter', 'analyzer', 'analyser',
+    ],
+    // 16. Primary sensing elements (in-line, no signal output)
+    element: [
+      'resistance temperature detector', 'restriction orifice',
+      'venturi tube', 'pitot tube', 'orifice plate',
+      'flow element', 'pressure element', 'temperature element', 'level element',
+      'thermocouple', 'rtd', 'primary element',
     ],
   };
 
-  // ISA tag prefix → kind
+  // ISA tag prefix → kind  (ISA 5.1 / ISA-5.06.01-2007)
   const TAG_KIND = {
-    // Columns
-    c:   'column',
-    // Separators
-    v:   'separator', d: 'separator', sep: 'separator',
-    // Heat exchangers
-    e:   'heat_exchanger',
-    // Absorbers
-    ab:  'absorber',
-    // Reactors
-    r:   'reactor',
-    // Pumps
-    p:   'pump',
-    // Compressors
-    k:   'compressor',
-    // Valves
-    cv:  'valve', fv: 'valve', lv: 'valve', pv: 'valve',
-    tv:  'valve', hv: 'valve', xv: 'valve', sv: 'valve',
-    // Vessels / storage
-    t:   'vessel', h: 'vessel',
-    // Meters / instruments
-    ft:  'meter', fm: 'meter', fi: 'meter', fe: 'meter',
+    // ── Process equipment ────────────────────────────────────────────────────
+    c:    'column',
+    v:    'separator',  d:  'separator', sep: 'separator',
+    e:    'heat_exchanger',
+    ab:   'absorber',
+    r:    'reactor',
+    p:    'pump',
+    k:    'compressor',
+    cv:   'valve', fv:  'valve', lv: 'valve', pv: 'valve',
+    tv:   'valve', hv:  'valve', xv: 'valve', sv: 'valve',
+    t:    'vessel', h:  'vessel',
+    // ── ISA 5.1 Transmitters  xT ─────────────────────────────────────────────
+    ft:   'transmitter', pt:  'transmitter', tt:  'transmitter', lt: 'transmitter',
+    at:   'transmitter', dt:  'transmitter', st:  'transmitter', wt: 'transmitter',
+    // ── ISA 5.1 Controllers   xC, xIC ────────────────────────────────────────
+    fc:   'controller',  pic: 'controller',  tic: 'controller', lic: 'controller',
+    fic:  'controller',  pc:  'controller',  tc:  'controller', lc:  'controller',
+    aic:  'controller',  ac:  'controller',  ffc: 'controller', frc: 'controller',
+    // ── ISA 5.1 Indicators    xI, xG ─────────────────────────────────────────
+    fi:   'indicator',   pi:  'indicator',   ti:  'indicator',  li:  'indicator',
+    ai:   'indicator',   fg:  'indicator',   pg:  'indicator',  lg:  'indicator',
+    // ── ISA 5.1 Recorders     xR ─────────────────────────────────────────────
+    fr:   'recorder',    pr:  'recorder',    tr:  'recorder',   lr:  'recorder',
+    ar:   'recorder',
+    // ── ISA 5.1 Switches      xS / xSH / xSL / xSHH / xSLL ──────────────────
+    fs:   'switch',  ps:   'switch',  ts:   'switch',  ls:   'switch',
+    fsh:  'switch',  fsl:  'switch',
+    psh:  'switch',  psl:  'switch',  pshh: 'switch',  psll: 'switch',
+    tsh:  'switch',  tsl:  'switch',  tshh: 'switch',  tsll: 'switch',
+    lsh:  'switch',  lsl:  'switch',  lshh: 'switch',  lsll: 'switch',
+    // ── ISA 5.1 Primary elements  xE ─────────────────────────────────────────
+    fe:   'element', pe:   'element', te:   'element', le:   'element',
+    fm:   'element',
+    // ── Analyzers ─────────────────────────────────────────────────────────────
+    qt:   'analyzer', ph:  'analyzer',
   };
 
   // Build sorted term list (longest first for greedy left-to-right match)
@@ -778,6 +846,21 @@
     return result;
   }
 
+  // Reclassify stream edges as 'signal' when both endpoints are instruments,
+  // or when an instrument drives a valve (final control element).
+  function classifySignalEdges(nodes, edges) {
+    const kindMap = new Map(nodes.map(n => [n.id, n.kind]));
+    return edges.map(e => {
+      if (e.kind !== 'stream') return e;
+      const fk = kindMap.get(e.from);
+      const tk = kindMap.get(e.to);
+      const fromInstr = _INSTR_KINDS.has(fk);
+      const toInstr   = _INSTR_KINDS.has(tk) || tk === 'valve' || tk === 'checkvalve';
+      if (fromInstr && toInstr) return Object.assign({}, e, { kind: 'signal' });
+      return e;
+    });
+  }
+
   function parse(text) {
     const sourceText  = String(text || '').trim();
     const normalized  = normalize(sourceText);
@@ -791,7 +874,7 @@
     // Reassign sequential IDs after reordering (n1 = first in flow, etc.)
     nodes = nodes.map((n, idx) => ({ id: 'n' + (idx + 1), label: n.label, kind: n.kind }));
 
-    const edges       = buildEdges(nodes, normalized);
+    const edges       = classifySignalEdges(nodes, buildEdges(nodes, normalized));
 
     const confidence  = nodes.length >= 3 ? 'high'
                       : nodes.length === 2 ? 'medium'
@@ -921,6 +1004,7 @@
   // ─── TO SVG ────────────────────────────────────────────────────────────────
 
   const COLORS = {
+    // ── Process equipment ─────────────────────────────────────────────────────
     column:         { bg: '#fff', border: '#2563eb', text: '#1e3a5f' },
     separator:      { bg: '#fff', border: '#0284c7', text: '#0c4a6e' },
     heat_exchanger: { bg: '#fff', border: '#16a34a', text: '#14532d' },
@@ -932,15 +1016,28 @@
     valve:          { bg: '#fff', border: '#dc2626', text: '#7f1d1d' },
     vessel:         { bg: '#fff', border: '#2563eb', text: '#1e3a5f' },
     meter:          { bg: '#fff', border: '#475569', text: '#1e293b' },
+    // ── ISA 5.1 Instrumentation ───────────────────────────────────────────────
+    transmitter:    { bg: '#fff', border: '#0369a1', text: '#0c4a6e' },
+    controller:     { bg: '#fff', border: '#0e7490', text: '#164e63' },
+    indicator:      { bg: '#fff', border: '#4b5563', text: '#1f2937' },
+    recorder:       { bg: '#fff', border: '#6b7280', text: '#374151' },
+    switch:         { bg: '#fff', border: '#b91c1c', text: '#7f1d1d' },
+    analyzer:       { bg: '#fff', border: '#7c3aed', text: '#4c1d95' },
+    element:        { bg: '#fff', border: '#6b7280', text: '#374151' },
     unknown:        { bg: '#fff', border: '#94a3b8', text: '#475569' },
   };
+
+  // Instrument kinds — edges between these (or instrument → valve) become 'signal'
+  const _INSTR_KINDS = new Set([
+    'transmitter', 'controller', 'indicator', 'recorder', 'switch', 'analyzer', 'element', 'meter',
+  ]);
 
   const NW = 80, NH = 72, HGAP = 48, PAD = 28, TOP_PAD = 36;
 
   // ── ISA 5.1 / ISO 10628 P&ID symbol library ──────────────────────────────
-  // cx, cy = centre of symbol area; stroke = equipment colour.
+  // cx, cy = centre of symbol area; stroke = equipment colour; label = node label.
   // Edge connection points remain at (x, y+NH/2) left and (x+NW, y+NH/2) right.
-  function _pidSymbol(kind, cx, cy, stroke) {
+  function _pidSymbol(kind, cx, cy, stroke, label) {
     switch (kind) {
 
       case 'pump': {
@@ -1059,11 +1156,90 @@
 <path d="M${cx-14},${cy} Q${cx-7},${cy-8} ${cx},${cy} Q${cx+7},${cy+8} ${cx+14},${cy}" fill="none" stroke="${stroke}" stroke-width="1.5"/>`;
       }
 
+      case 'transmitter': {
+        // ISA 5.1 field instrument bubble — plain circle
+        const r = 18;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, r, label);
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>${top}${bot}`;
+      }
+
+      case 'controller': {
+        // ISA 5.1 panel / DCS instrument — circle with single horizontal bar
+        const r = 18;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, r, label);
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<line x1="${cx-r}" y1="${cy}" x2="${cx+r}" y2="${cy}" stroke="${stroke}" stroke-width="1.2"/>${top}${bot}`;
+      }
+
+      case 'recorder': {
+        // ISA 5.1 recorder — circle with two horizontal bars
+        const r = 18;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, r, label);
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<line x1="${cx-r+3}" y1="${cy-5}" x2="${cx+r-3}" y2="${cy-5}" stroke="${stroke}" stroke-width="1"/>
+<line x1="${cx-r+3}" y1="${cy+5}" x2="${cx+r-3}" y2="${cy+5}" stroke="${stroke}" stroke-width="1"/>${top}${bot}`;
+      }
+
+      case 'indicator': {
+        // ISA 5.1 local indicator — plain circle, smaller
+        const r = 16;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, r, label);
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>${top}${bot}`;
+      }
+
+      case 'switch': {
+        // ISA 5.1 switch — circle with diagonal line
+        const r = 16;
+        const off = Math.round(r * 0.65);
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, r, label);
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-off}" y1="${cy+off}" x2="${cx+off}" y2="${cy-off}" stroke="${stroke}" stroke-width="1.5"/>${top}${bot}`;
+      }
+
+      case 'analyzer': {
+        // ISA 5.1 analyzer — diamond (rotated square) with circle inside
+        const hw = 18, hh = 18;
+        const r2 = 7;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, hw, label);
+        return `<polygon points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<circle cx="${cx}" cy="${cy}" r="${r2}" fill="none" stroke="${stroke}" stroke-width="1.2"/>${top}${bot}`;
+      }
+
+      case 'element': {
+        // ISA 5.1 primary element — small filled diamond
+        const hw = 10, hh = 10;
+        const { top, bot } = _bubbleTag(kind, cx, cy, stroke, hw, label);
+        return `<polygon points="${cx},${cy-hh} ${cx+hw},${cy} ${cx},${cy+hh} ${cx-hw},${cy}" fill="${stroke}" stroke="${stroke}" stroke-width="1.2" opacity="0.85"/>${top}${bot}`;
+      }
+
       default: {
         // Generic equipment: rounded rectangle
         return `<rect x="${cx-22}" y="${cy-14}" width="44" height="28" rx="4" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
       }
     }
+  }
+
+  // Extract tag letters and number from a label for display inside ISA bubble.
+  // "FT-101" → letters="FT", number="101"
+  // "Flow Transmitter" → letters="FT" (from kind abbr), number=""
+  function _bubbleTag(kind, cx, cy, stroke, r, label) {
+    const KIND_ABBR = {
+      transmitter: 'T', controller: 'C', indicator: 'I',
+      recorder: 'R', switch: 'S', analyzer: 'A', element: 'E', meter: 'M',
+    };
+    let letters = KIND_ABBR[kind] || '';
+    let number  = '';
+    if (label) {
+      const m = String(label).match(/^([A-Za-z]{1,5})-?(\d+[A-Za-z]?)?/);
+      if (m && m[1] && m[1].length <= 5) { letters = m[1].toUpperCase(); number = m[2] || ''; }
+    }
+    const top = letters
+      ? `<text x="${cx}" y="${cy - (number ? 4 : 1)}" fill="${stroke}" font-size="9" font-weight="700" font-family="monospace,system-ui" text-anchor="middle">${esc(letters)}</text>`
+      : '';
+    const bot = number
+      ? `<text x="${cx}" y="${cy + 7}" fill="${stroke}" font-size="8" font-family="monospace,system-ui" text-anchor="middle">${esc(number)}</text>`
+      : '';
+    return { top, bot };
   }
 
   function toSvg(doc) {
@@ -1140,6 +1316,9 @@
         const mx = (x1 + x2) / 2;
         edgeSvg += `<path d="M${x1},${y1} C${x1+cpX},${ay} ${x2-cpX},${ay} ${x2},${y2}" fill="none" stroke="#ffa657" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-b)"/>`;
         if (e.label) edgeSvg += `<text x="${mx}" y="${ay-4}" fill="#ffa657" font-size="10" font-family="system-ui,sans-serif" text-anchor="middle">${esc(e.label)}</text>`;
+      } else if (e.kind === 'signal') {
+        // ISA instrument signal line — thin dashed, blue
+        edgeSvg += `<path d="M${x1},${y1} C${x1+cpX},${y1} ${x2-cpX},${y2} ${x2},${y2}" fill="none" stroke="#0369a1" stroke-width="1.1" stroke-dasharray="3,3" marker-end="url(#arr-s)"/>`;
       } else if (e.kind === 'recycle') {
         const ay = Math.max(fp.y, tp.y) + NH + 18;
         const mx = (fp.x + NW / 2 + tp.x + NW / 2) / 2;
@@ -1154,12 +1333,14 @@
       const p = pos[n.id];
       if (!p) continue;
       const c   = COLORS[n.kind] || COLORS.unknown;
-      const cx  = p.x + NW / 2;
-      const cy  = p.y + NH / 2 - 6;   // symbol centre, shifted up to leave label room
-      const lby = p.y + NH - 6;        // label baseline
-      const lines = wrapText(n.label, 12);
+      const cx      = p.x + NW / 2;
+      const cy      = p.y + NH / 2 - 6;   // symbol centre, shifted up to leave label room
+      const lby     = p.y + NH - 6;        // label baseline
+      // Instrument bubbles carry the tag inside — only show external label for process equipment
+      const isInstr = _INSTR_KINDS.has(n.kind);
+      const lines   = isInstr ? [] : wrapText(n.label, 12);
       nodeSvg += `<g>
-  ${_pidSymbol(n.kind, cx, cy, c.border)}
+  ${_pidSymbol(n.kind, cx, cy, c.border, n.label)}
   ${lines.map((l, li) => `<text x="${cx}" y="${lby - (lines.length-1-li)*11}" fill="${c.text}" font-size="10" font-weight="600" font-family="system-ui,sans-serif" text-anchor="middle">${esc(l)}</text>`).join('\n  ')}
 </g>`;
     }
@@ -1173,6 +1354,7 @@
   <marker id="arr"   markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#64748b"/></marker>
   <marker id="arr-b" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#ffa657"/></marker>
   <marker id="arr-r" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#3fb950"/></marker>
+  <marker id="arr-s" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0,6 2.5,0 5" fill="#0369a1"/></marker>
 </defs>
 <rect width="${svgW}" height="${svgH}" fill="#f8fafc" rx="8"/>
 ${titleSvg}
@@ -1266,18 +1448,27 @@ ${nodeSvg}
 
   // Node shape per kind — encodes equipment type symbolically in plain text.
   const _MERMAID_SHAPE = {
-    valve:          { open: '([', close: '])' },
-    checkvalve:     { open: '([', close: '])' },
-    reactor:        { open: '{{', close: '}}' },
-    column:         { open: '[[', close: ']]' },
-    separator:      { open: '[(', close: ')]' },
-    vessel:         { open: '[(', close: ')]' },
-    heat_exchanger: { open: '>', close: ']'   },
-    compressor:     { open: '[/', close: '/]' },
-    pump:           { open: '[\\', close: '/]'},
-    meter:          { open: '[|', close: '|]' },
-    filter:         { open: '[/', close: '/]' },
-    relief:         { open: '/[', close: ']/' },
+    // ── Process equipment ─────────────────────────────────────────────────────
+    valve:          { open: '([',  close: '])' },
+    checkvalve:     { open: '([',  close: '])' },
+    reactor:        { open: '{{',  close: '}}' },
+    column:         { open: '[[',  close: ']]' },
+    separator:      { open: '[(',  close: ')]' },
+    vessel:         { open: '[(',  close: ')]' },
+    heat_exchanger: { open: '>',   close: ']'  },
+    compressor:     { open: '[/',  close: '/]' },
+    pump:           { open: '[\\', close: '/]' },
+    meter:          { open: '[|',  close: '|]' },
+    filter:         { open: '[/',  close: '/]' },
+    relief:         { open: '/[',  close: ']/' },
+    // ── ISA 5.1 Instruments — all use circle notation ─────────────────────────
+    transmitter:    { open: '((',  close: '))' },
+    controller:     { open: '((',  close: '))' },
+    indicator:      { open: '((',  close: '))' },
+    recorder:       { open: '((',  close: '))' },
+    switch:         { open: '((',  close: '))' },
+    analyzer:       { open: '{',   close: '}'  },
+    element:        { open: '[(',  close: ')]' },
   };
 
   function toMermaid(doc) {
@@ -1292,8 +1483,9 @@ ${nodeSvg}
     });
 
     edges.forEach(e => {
-      const arrow = e.kind === 'bypass' ? '-. Bypass .->' :
-                    e.kind === 'recycle' ? '-- Recycle -->' : '-->';
+      const arrow = e.kind === 'bypass'  ? '-. Bypass .->'  :
+                    e.kind === 'recycle' ? '-- Recycle -->' :
+                    e.kind === 'signal'  ? '-. Signal .->': '-->';
       lines.push(`  ${e.from} ${arrow} ${e.to}`);
     });
 
@@ -1341,7 +1533,15 @@ ${nodeSvg}
     '               anti-surge valve — use this kind for any named bypass valve (e.g. CV-101B)',
     'vessel       : surge drum, buffer vessel, blowdown drum, reflux drum, overhead accumulator,',
     '               atmospheric/fixed-roof/floating-roof tank, day tank, slop tank, hot well, sump',
-    'meter        : flow meter, mass flow meter, coriolis meter, vortex meter, orifice plate',
+    'meter        : flow meter, mass flow meter, coriolis meter, vortex meter, ultrasonic flow meter',
+    'transmitter  : FT (flow), PT (pressure), TT (temperature), LT (level), AT (analyzer),',
+    '               DP transmitter — field-mounted, sends 4-20 mA / digital signal',
+    'controller   : FIC, PIC, TIC, LIC, AIC — DCS/panel, receives measurement, outputs to valve',
+    'indicator    : FI, PI, TI, LI — local read-out gauge, no signal output',
+    'recorder     : FR, PR, TR, LR — chart or data recorder',
+    'switch       : FS/PS/TS/LS + H/L/HH/LL suffix — trip/shutdown switches',
+    'analyzer     : gas chromatograph, pH analyzer, O2 analyzer, moisture analyzer, online analyzer',
+    'element      : FE, TE, LE — primary sensing element (orifice plate, thermocouple, RTD)',
   ].join('\n');
 
   const _LLM_SYSTEM = [
@@ -1355,11 +1555,12 @@ ${nodeSvg}
     '  nodes:',
     '    - id: n1',
     '      label: <ISA tag or equipment name>',
-    '      kind: <column|separator|heat_exchanger|absorber|reactor|adsorption|pump|compressor|valve|vessel|meter>',
+    '      kind: <column|separator|heat_exchanger|absorber|reactor|adsorption|pump|compressor|valve|vessel|meter|transmitter|controller|indicator|recorder|switch|analyzer|element>',
     '  edges:',
     '    - from: n1',
     '      to: n2',
-    '      kind: stream',
+    '      kind: stream   # stream | bypass | recycle | signal',
+    '  # Use kind: signal for instrument→instrument or instrument→valve edges',
     '  meta:',
     '    confidence: <high|medium|low|none>',
     '',
