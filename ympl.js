@@ -935,7 +935,136 @@
     unknown:        { bg: '#fff', border: '#94a3b8', text: '#475569' },
   };
 
-  const NW = 96, NH = 40, HGAP = 36, PAD = 24, TOP_PAD = 36;
+  const NW = 80, NH = 72, HGAP = 48, PAD = 28, TOP_PAD = 36;
+
+  // ── ISA 5.1 / ISO 10628 P&ID symbol library ──────────────────────────────
+  // cx, cy = centre of symbol area; stroke = equipment colour.
+  // Edge connection points remain at (x, y+NH/2) left and (x+NW, y+NH/2) right.
+  function _pidSymbol(kind, cx, cy, stroke) {
+    switch (kind) {
+
+      case 'pump': {
+        // Centrifugal pump: circle casing + filled impeller triangle
+        const r = 18;
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<polygon points="${cx-11},${cy+13} ${cx-11},${cy-13} ${cx+15},${cy}" fill="${stroke}" opacity="0.9"/>`;
+      }
+
+      case 'compressor': {
+        // Compressor: circle + open triangle + centre shaft line
+        const r = 18;
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<polygon points="${cx-11},${cy+13} ${cx-11},${cy-13} ${cx+15},${cy}" fill="none" stroke="${stroke}" stroke-width="1.4"/>
+<line x1="${cx-11}" y1="${cy}" x2="${cx+15}" y2="${cy}" stroke="${stroke}" stroke-width="1.2"/>`;
+      }
+
+      case 'valve':
+      case 'checkvalve': {
+        // Globe/control valve: bowtie + actuator circle on top
+        const hw = 15, hh = 11;
+        return `<polygon points="${cx},${cy} ${cx-hw},${cy-hh} ${cx-hw},${cy+hh}" fill="${stroke}" stroke="${stroke}" stroke-width="1.2"/>
+<polygon points="${cx},${cy} ${cx+hw},${cy-hh} ${cx+hw},${cy+hh}" fill="${stroke}" stroke="${stroke}" stroke-width="1.2"/>
+<line x1="${cx}" y1="${cy-hh}" x2="${cx}" y2="${cy-hh-7}" stroke="${stroke}" stroke-width="1.5"/>
+<circle cx="${cx}" cy="${cy-hh-13}" r="6" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+
+      case 'vessel': {
+        // Vertical pressure vessel / drum: cylinder profile
+        const rw = 16, rh = 21, ery = 5;
+        return `<rect x="${cx-rw}" y="${cy-rh+ery}" width="${rw*2}" height="${(rh-ery)*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy-rh+ery}" rx="${rw}" ry="${ery}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy+rh-ery}" rx="${rw}" ry="${ery}" fill="#dbeafe" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+
+      case 'separator': {
+        // Horizontal two-phase separator: horizontal cylinder + interface line
+        const rw = 26, rh = 13, erx = 7;
+        return `<rect x="${cx-rw+erx}" y="${cy-rh}" width="${(rw-erx)*2}" height="${rh*2}" fill="#fff" stroke="none"/>
+<ellipse cx="${cx-rw+erx}" cy="${cy}" rx="${erx}" ry="${rh}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx+rw-erx}" cy="${cy}" rx="${erx}" ry="${rh}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-rw+erx}" y1="${cy-rh}" x2="${cx+rw-erx}" y2="${cy-rh}" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-rw+erx}" y1="${cy+rh}" x2="${cx+rw-erx}" y2="${cy+rh}" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-rw+erx+3}" y1="${cy+4}" x2="${cx+rw-erx-3}" y2="${cy+4}" stroke="${stroke}" stroke-width="1" stroke-dasharray="3,2" opacity="0.65"/>`;
+      }
+
+      case 'column': {
+        // Distillation column / tower: tall narrow cylinder with tray lines
+        const rw = 13, rh = 26, ery = 4;
+        return `<rect x="${cx-rw}" y="${cy-rh+ery}" width="${rw*2}" height="${(rh-ery)*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy-rh+ery}" rx="${rw}" ry="${ery}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy+rh-ery}" rx="${rw}" ry="${ery}" fill="#dbeafe" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-rw}" y1="${cy-10}" x2="${cx+rw}" y2="${cy-10}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>
+<line x1="${cx-rw}" y1="${cy}" x2="${cx+rw}" y2="${cy}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>
+<line x1="${cx-rw}" y1="${cy+10}" x2="${cx+rw}" y2="${cy+10}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>`;
+      }
+
+      case 'reactor': {
+        // CSTR reactor: circle + agitator shaft + impeller arms
+        const r = 18;
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.8"/>
+<line x1="${cx}" y1="${cy-12}" x2="${cx}" y2="${cy+10}" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-9}" y1="${cy+6}" x2="${cx+9}" y2="${cy+6}" stroke="${stroke}" stroke-width="1.8"/>
+<line x1="${cx-7}" y1="${cy-1}" x2="${cx+7}" y2="${cy-1}" stroke="${stroke}" stroke-width="1.4"/>`;
+      }
+
+      case 'heat_exchanger': {
+        // Shell-and-tube exchanger: outer shell + two tube-bundle U-bends
+        const rw = 26, rh = 13;
+        return `<rect x="${cx-rw}" y="${cy-rh}" width="${rw*2}" height="${rh*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5" rx="3"/>
+<line x1="${cx-rw+7}" y1="${cy-rh}" x2="${cx-rw+7}" y2="${cy+rh}" stroke="${stroke}" stroke-width="1" opacity="0.45"/>
+<line x1="${cx+rw-7}" y1="${cy-rh}" x2="${cx+rw-7}" y2="${cy+rh}" stroke="${stroke}" stroke-width="1" opacity="0.45"/>
+<path d="M${cx-14},${cy-rh+2} L${cx-14},${cy+1} Q${cx},${cy+1} ${cx},${cy+rh-2}" fill="none" stroke="${stroke}" stroke-width="1.4"/>
+<path d="M${cx+14},${cy-rh+2} L${cx+14},${cy+1} Q${cx},${cy+1} ${cx},${cy+rh-2}" fill="none" stroke="${stroke}" stroke-width="1.4"/>`;
+      }
+
+      case 'absorber': {
+        // Absorber/stripper: column with packing hatching
+        const rw = 13, rh = 26, ery = 4;
+        return `<rect x="${cx-rw}" y="${cy-rh+ery}" width="${rw*2}" height="${(rh-ery)*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy-rh+ery}" rx="${rw}" ry="${ery}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<ellipse cx="${cx}" cy="${cy+rh-ery}" rx="${rw}" ry="${ery}" fill="#cffafe" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-rw}" y1="${cy-12}" x2="${cx+rw}" y2="${cy-6}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>
+<line x1="${cx-rw}" y1="${cy-2}" x2="${cx+rw}" y2="${cy+4}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>
+<line x1="${cx-rw}" y1="${cy+8}" x2="${cx+rw}" y2="${cy+14}" stroke="${stroke}" stroke-width="0.9" opacity="0.5"/>`;
+      }
+
+      case 'filter': {
+        // Filter/strainer: rectangle with diagonal screen lines
+        const rw = 20, rh = 13;
+        return `<rect x="${cx-rw}" y="${cy-rh}" width="${rw*2}" height="${rh*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5" rx="2"/>
+<line x1="${cx-16}" y1="${cy-rh}" x2="${cx-rw}" y2="${cy+2}" stroke="${stroke}" stroke-width="1" opacity="0.6"/>
+<line x1="${cx-6}" y1="${cy-rh}" x2="${cx+6}" y2="${cy+rh}" stroke="${stroke}" stroke-width="1" opacity="0.6"/>
+<line x1="${cx+6}" y1="${cy-rh}" x2="${cx+rw}" y2="${cy+2}" stroke="${stroke}" stroke-width="1" opacity="0.6"/>`;
+      }
+
+      case 'meter': {
+        // Flow meter: circle + diagonal flow arrow
+        const r = 16;
+        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-8}" y1="${cy+8}" x2="${cx+8}" y2="${cy-8}" stroke="${stroke}" stroke-width="1.8"/>
+<polygon points="${cx+8},${cy-8} ${cx+3},${cy-8} ${cx+8},${cy-3}" fill="${stroke}"/>`;
+      }
+
+      case 'relief': {
+        // Safety/relief valve: filled triangle + base bar + tail
+        return `<polygon points="${cx},${cy-17} ${cx-13},${cy+7} ${cx+13},${cy+7}" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>
+<line x1="${cx-15}" y1="${cy+7}" x2="${cx+15}" y2="${cy+7}" stroke="${stroke}" stroke-width="2"/>
+<line x1="${cx}" y1="${cy+7}" x2="${cx}" y2="${cy+16}" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+
+      case 'adsorption': {
+        // PSA/TSA bed: rectangle + wave (membrane/bed symbol)
+        const rw = 20, rh = 14;
+        return `<rect x="${cx-rw}" y="${cy-rh}" width="${rw*2}" height="${rh*2}" fill="#fff" stroke="${stroke}" stroke-width="1.5" rx="2"/>
+<path d="M${cx-14},${cy} Q${cx-7},${cy-8} ${cx},${cy} Q${cx+7},${cy+8} ${cx+14},${cy}" fill="none" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+
+      default: {
+        // Generic equipment: rounded rectangle
+        return `<rect x="${cx-22}" y="${cy-14}" width="44" height="28" rx="4" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+    }
+  }
 
   function toSvg(doc) {
     const nodes = doc.nodes || [];
@@ -1019,19 +1148,19 @@
       }
     }
 
-    // ── 5. Draw nodes ──
+    // ── 5. Draw nodes (ISA 5.1 / ISO 10628 P&ID symbols) ──
     let nodeSvg = '';
     for (const n of nodes) {
       const p = pos[n.id];
       if (!p) continue;
       const c   = COLORS[n.kind] || COLORS.unknown;
       const cx  = p.x + NW / 2;
-      const lines = wrapText(n.label, 14);
-      const ty0   = p.y + NH / 2 - (lines.length - 1) * 7 + 1;
+      const cy  = p.y + NH / 2 - 6;   // symbol centre, shifted up to leave label room
+      const lby = p.y + NH - 6;        // label baseline
+      const lines = wrapText(n.label, 12);
       nodeSvg += `<g>
-  <rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="6" fill="${c.bg}" stroke="${c.border}" stroke-width="1.5"/>
-  ${lines.map((l, li) => `<text x="${cx}" y="${ty0 + li*14}" fill="${c.text}" font-size="11" font-weight="500" font-family="system-ui,sans-serif" text-anchor="middle">${esc(l)}</text>`).join('\n  ')}
-  <text x="${cx}" y="${p.y+NH-6}" fill="${c.border}" font-size="9" font-family="system-ui,sans-serif" text-anchor="middle" opacity="0.75">${esc(kindLabel(n.kind))}</text>
+  ${_pidSymbol(n.kind, cx, cy, c.border)}
+  ${lines.map((l, li) => `<text x="${cx}" y="${lby - (lines.length-1-li)*11}" fill="${c.text}" font-size="10" font-weight="600" font-family="system-ui,sans-serif" text-anchor="middle">${esc(l)}</text>`).join('\n  ')}
 </g>`;
     }
 
