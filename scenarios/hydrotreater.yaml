@@ -1,0 +1,124 @@
+schema_version: ympl-1.0
+id: hydrotreater_unit
+title: Hydrotreater Unit
+
+# Two-feed hydrotreater: hydrocarbon (10,000 kg/hr, ~2 wt% S) + H2 (150 kg/hr)
+# Target: reduce sulfur from 2 wt% to 10 ppm. Fixed-bed top-down PFR, 450 psig, 300 °C.
+
+nodes:
+  # ── Hydrocarbon feed train ────────────────────────────────────────────────
+  - id: n1
+    label: Feed Tank
+    kind: vessel
+  - id: n2
+    label: P-101
+    kind: pump
+  - id: n3
+    label: FCV-101
+    kind: valve
+
+  # ── H2 feed train ─────────────────────────────────────────────────────────
+  - id: n4
+    label: H2 Header
+    kind: vessel
+  - id: n5
+    label: K-101
+    kind: compressor
+  - id: n6
+    label: FCV-102
+    kind: valve
+
+  # ── Main process flow (combined feed → reactor → separation) ──────────────
+  - id: n7
+    label: E-101
+    kind: heat_exchanger
+  - id: n8
+    label: R-101
+    kind: reactor
+  - id: n9
+    label: E-102
+    kind: heat_exchanger
+  - id: n10
+    label: V-101
+    kind: separator
+
+  # ── Gas outlet: pressure control to vent + H2 recycle ─────────────────────
+  - id: n11
+    label: PCV-101
+    kind: valve
+  - id: n12
+    label: K-102
+    kind: compressor
+
+  # ── Liquid product ─────────────────────────────────────────────────────────
+  - id: n13
+    label: P-102
+    kind: pump
+
+edges:
+  # Hydrocarbon feed
+  - from: n1
+    to: n2
+    kind: stream
+  - from: n2
+    to: n3
+    kind: stream
+  - from: n3
+    to: n7
+    kind: stream
+
+  # H2 feed
+  - from: n4
+    to: n5
+    kind: stream
+  - from: n5
+    to: n6
+    kind: stream
+  - from: n6
+    to: n7
+    kind: stream
+
+  # Main process path
+  - from: n7
+    to: n8
+    kind: stream
+  - from: n8
+    to: n9
+    kind: stream
+  - from: n9
+    to: n10
+    kind: stream
+
+  # Gas outlet — pressure control to vent
+  - from: n10
+    to: n11
+    kind: stream
+    label: Gas to Vent
+
+  # H2 recycle — compressor back to combined feed
+  - from: n10
+    to: n12
+    kind: stream
+    label: H2 Recycle Gas
+  - from: n12
+    to: n7
+    kind: recycle
+    label: H2 Recycle
+
+  # Liquid product out of unit
+  - from: n10
+    to: n13
+    kind: stream
+    label: Liquid Product
+
+meta:
+  confidence: high
+  source_text: >
+    Hydrotreater unit. Feed: untreated hydrocarbon (~2 wt% S, 10,000 kg/hr) from Feed Tank
+    pumped by P-101 through FCV-101. H2 (150 kg/hr) from H2 Header, pressure boosted by K-101
+    compressor through FCV-102. Both streams combine and are preheated in E-101 to 300 C at
+    450 psig before entering R-101, a fixed-bed top-down heterogeneous catalyst PFR. Reactor
+    outlet is cooled in E-102 to 20 C and separated in V-101 high pressure separator. Gas
+    outlet: PCV-101 controls separator pressure (gas to vent). H2 recycle: K-102 compressor
+    boosts unreacted H2 back to unit inlet via E-101. Liquid product from V-101 via P-102
+    pump to storage. Product sulfur target: 10 ppm.

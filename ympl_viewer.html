@@ -116,9 +116,16 @@ textarea::placeholder{color:var(--muted);opacity:.4;}
   color:var(--text);overflow-y:auto;}
 
 /* Diagram pane */
-#out-svg{flex:1;overflow:auto;padding:14px;
-  display:block;}
+#out-svg{flex:1;overflow:auto;padding:14px;display:block;
+  min-height:0;}                   /* allow flex child to shrink + scroll */
 #out-svg svg{display:block;}
+#out-svg.fit-mode svg{max-width:100%;height:auto;}  /* fit-to-pane mode */
+#diagram-fit-btn{
+  position:absolute;right:10px;top:6px;
+  font-size:10px;padding:2px 7px;cursor:pointer;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:3px;color:var(--muted);
+}
 
 /* Help pane */
 .help{flex:1;overflow-y:auto;padding:16px;font-size:12px;line-height:1.7;}
@@ -372,8 +379,9 @@ Ctrl+Enter to parse."></textarea>
       </div>
     </div>
 
-    <div id="pane-svg" class="pane">
-      <div id="out-svg">
+    <div id="pane-svg" class="pane" style="position:relative;">
+      <button id="diagram-fit-btn" onclick="toggleDiagramFit()" title="Toggle fit-to-pane / natural size">Fit</button>
+      <div id="out-svg" class="fit-mode">
         <div class="empty"><div class="empty-icon">&#9671;</div><p>Parse input to see diagram</p></div>
       </div>
     </div>
@@ -775,6 +783,14 @@ function showResult(result, usedLlm) {
 
   // Save-correction button — visible whenever there is a result
   document.getElementById('save-correction').classList.add('visible');
+}
+
+function toggleDiagramFit() {
+  const el  = document.getElementById('out-svg');
+  const btn = document.getElementById('diagram-fit-btn');
+  const fit = el.classList.toggle('fit-mode');
+  btn.textContent = fit ? 'Fit' : '1:1';
+  btn.title = fit ? 'Switch to natural size (scrollable)' : 'Switch to fit-to-pane';
 }
 
 function copyMermaid() {
