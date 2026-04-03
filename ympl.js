@@ -112,31 +112,51 @@
     ],
     // 9. Inline measurement devices (physical, in-pipe)
     meter: [
-      'coriolis meter', 'mass flow meter', 'ultrasonic flow meter', 'magnetic flow meter',
-      'vortex meter', 'turbine meter', 'flow meter', 'flowmeter', 'meter',
+      'coriolis mass flowmeter', 'coriolis meter',
+      'magnetic flowmeter', 'electromagnetic flowmeter',
+      'transit-time ultrasonic', 'ultrasonic flow meter', 'clamp-on ultrasonic',
+      'vortex flowmeter', 'vortex shedding meter',
+      'positive displacement meter', 'pd meter', 'oval gear meter',
+      'turbine meter', 'turbine flow meter',
+      'mass flow meter', 'flow meter', 'flowmeter', 'meter',
     ],
-    // ── ISA 5.1 Instrumentation ────────────────────────────────────────────────
-    // 10. Transmitters (field-mounted, sends 4-20 mA / digital signal)
+    // ── ISA 5.1 Instrumentation (Lipták Vol. 1 & Yeturu/Reddy) ────────────────
+    // 10. Transmitters — field-mounted, outputs 4–20 mA / HART / digital signal
     transmitter: [
-      'differential pressure transmitter', 'dp transmitter',
-      'mass flow transmitter', 'flow transmitter',
-      'pressure transmitter', 'temperature transmitter',
-      'level transmitter', 'density transmitter',
-      'speed transmitter', 'vibration transmitter',
+      // Flow
+      'differential pressure transmitter', 'dp transmitter', 'delta-p transmitter',
+      'averaging pitot transmitter', 'mass flow transmitter', 'flow transmitter',
+      // Level
+      'guided wave radar transmitter', 'gwr transmitter', 'radar level transmitter',
+      'non-contacting radar transmitter', 'displacer transmitter',
+      'interface level transmitter', 'hydrostatic level transmitter',
+      'level transmitter',
+      // Pressure
+      'pressure transmitter',
+      // Temperature
+      'temperature transmitter',
+      // Other
+      'density transmitter', 'speed transmitter', 'vibration transmitter',
+      'analyzer transmitter', 'quality transmitter',
       'transmitter',
     ],
-    // 11. Controllers (DCS / panel — receives measurement, outputs signal)
+    // 11. Controllers — DCS / panel, receives measurement, outputs to final element
     controller: [
       'flow indicating controller', 'pressure indicating controller',
       'temperature indicating controller', 'level indicating controller',
-      'flow ratio controller', 'split-range controller', 'cascade controller',
+      'analyzer indicating controller',
+      'feedforward controller', 'cascade controller',
+      'override controller', 'split-range controller',
+      'flow ratio controller', 'ratio controller',
       'flow controller', 'pressure controller', 'temperature controller', 'level controller',
       'pid controller', 'controller',
     ],
-    // 12. Indicators / gauges (local read-out only, no signal output)
+    // 12. Indicators / gauges — local read-out, no signal output
     indicator: [
       'flow indicator', 'pressure indicator', 'temperature indicator', 'level indicator',
-      'pressure gauge', 'temperature gauge', 'level gauge', 'sight glass',
+      'bourdon gauge', 'bourdon tube gauge', 'dial gauge', 'local gauge', 'mechanical gauge',
+      'pressure gauge', 'temperature gauge', 'level gauge',
+      'level bridle', 'gauge glass', 'sight glass',
       'local indicator', 'indicator',
     ],
     // 13. Recorders
@@ -144,8 +164,10 @@
       'flow recorder', 'pressure recorder', 'temperature recorder', 'level recorder',
       'chart recorder', 'data recorder', 'recorder',
     ],
-    // 14. Switches / trips
+    // 14. Switches / trips — ISA xS, xSH, xSL, xSHH, xSLL
     switch: [
+      'high-high pressure switch', 'low-low pressure switch',
+      'high-high level switch', 'low-low level switch',
       'pressure switch high high', 'pressure switch low low',
       'level switch high high', 'level switch low low',
       'flow switch high', 'flow switch low',
@@ -153,21 +175,33 @@
       'temperature switch high', 'temperature switch low',
       'level switch high', 'level switch low',
       'flow switch', 'pressure switch', 'temperature switch', 'level switch',
-      'shutdown switch', 'trip switch',
+      'safety shutdown switch', 'trip switch', 'shutdown switch',
     ],
-    // 15. Analyzers (composition / quality measurement)
+    // 15. Analyzers — composition / quality measurement
     analyzer: [
-      'gas chromatograph', 'ph analyzer', 'ph meter', 'ph probe',
+      'gas chromatograph', 'online gas chromatograph',
+      'ph analyzer', 'ph meter', 'ph probe',
       'oxygen analyzer', 'o2 analyzer', 'co2 analyzer',
       'moisture analyzer', 'gas analyzer', 'online analyzer',
-      'quality transmitter', 'analyzer', 'analyser',
+      'analyzer', 'analyser',
     ],
-    // 16. Primary sensing elements (in-line, no signal output)
+    // 16. Primary sensing elements — in-line, no signal output (Lipták §3–§6)
     element: [
-      'resistance temperature detector', 'restriction orifice',
-      'venturi tube', 'pitot tube', 'orifice plate',
-      'flow element', 'pressure element', 'temperature element', 'level element',
-      'thermocouple', 'rtd', 'primary element',
+      // Flow elements
+      'averaging pitot tube', 'multi-port pitot', 'pitot tube',
+      'restriction orifice', 'orifice plate', 'venturi tube', 'venturi nozzle',
+      'flow element', 'flow nozzle',
+      // Temperature sensing elements
+      'resistance temperature detector', 'resistance thermometer',
+      'pt100', 'pt1000', 'prt',
+      'thermocouple', 'thermowell', 'thermometer well', 'protection tube',
+      'infrared pyrometer', 'radiation thermometer',
+      'temperature element',
+      // Pressure / level elements
+      'pressure element', 'pressure tap',
+      'level element', 'level bridle',
+      // Generic
+      'primary element', 'rtd',
     ],
   };
 
@@ -301,10 +335,24 @@
     [/\brebolier\b/gi, 'reboiler'],
     [/\breboler\b/gi, 'reboiler'],
     [/\brebiler\b/gi, 'reboiler'],
-    // Meters
+    // Meters & flow elements
     [/\bflowmetr\b/gi, 'flow meter'],
     [/\bflow\s+mter\b/gi, 'flow meter'],
     [/\bflw\s+meter\b/gi, 'flow meter'],
+    [/\bannubar\b/gi, 'averaging pitot tube'],          // Emerson trade name → generic
+    [/\bmagmeter\b/gi, 'magnetic flowmeter'],
+    [/\bmag\s+flow\b/gi, 'magnetic flowmeter'],
+    [/\bem\s+flow\b/gi, 'magnetic flowmeter'],
+    // Temperature sensing
+    [/\bpt\s*100\b/gi, 'rtd'],
+    [/\bpt\s*1000\b/gi, 'rtd'],
+    [/\bprtd\b/gi, 'rtd'],
+    [/\bthermowell\b/gi, 'thermowell'],                // keep canonical spelling
+    // Instrument signal / calibration shorthand
+    [/\b4\s*[-–]\s*20\s*ma\b/gi, 'transmitter'],      // "4-20 mA signal" → transmitter context
+    [/\bdp\s+tx\b/gi, 'dp transmitter'],
+    [/\bep\s+positioner\b/gi, 'valve positioner'],
+    [/\bdvc\b/gi, 'valve positioner'],                 // Fisher trade name → generic
     // Absorbers / strippers
     [/\babosrber\b/gi, 'absorber'],
     [/\babsorbar\b/gi, 'absorber'],
@@ -440,7 +488,7 @@
 
       if (!matched) {
         // ── Try standalone ISA tag (e.g. CV-101 not preceded by a kind word) ──
-        const tagM = text.slice(i).match(/^([A-Za-z]{1,3}-\d{3,4}[A-Za-z]?)\b/);
+        const tagM = text.slice(i).match(/^([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\b/);
         if (tagM) {
           const pre = i === 0 || /[\s,;.()\-\/]/.test(text[i - 1]);
           if (pre) {
@@ -1533,15 +1581,58 @@ ${nodeSvg}
     '               anti-surge valve — use this kind for any named bypass valve (e.g. CV-101B)',
     'vessel       : surge drum, buffer vessel, blowdown drum, reflux drum, overhead accumulator,',
     '               atmospheric/fixed-roof/floating-roof tank, day tank, slop tank, hot well, sump',
-    'meter        : flow meter, mass flow meter, coriolis meter, vortex meter, ultrasonic flow meter',
-    'transmitter  : FT (flow), PT (pressure), TT (temperature), LT (level), AT (analyzer),',
-    '               DP transmitter — field-mounted, sends 4-20 mA / digital signal',
-    'controller   : FIC, PIC, TIC, LIC, AIC — DCS/panel, receives measurement, outputs to valve',
-    'indicator    : FI, PI, TI, LI — local read-out gauge, no signal output',
-    'recorder     : FR, PR, TR, LR — chart or data recorder',
-    'switch       : FS/PS/TS/LS + H/L/HH/LL suffix — trip/shutdown switches',
-    'analyzer     : gas chromatograph, pH analyzer, O2 analyzer, moisture analyzer, online analyzer',
-    'element      : FE, TE, LE — primary sensing element (orifice plate, thermocouple, RTD)',
+    // §1 Measurement & Signal Fundamentals
+    'transmitter  : FT/PT/TT/LT/AT/DT — field-mounted, outputs 4–20 mA / HART / digital signal;',
+    '               synonyms: DP transmitter, differential pressure transmitter, delta-P transmitter,',
+    '               radar level transmitter, GWR transmitter, guided wave radar transmitter,',
+    '               displacer transmitter, hydrostatic level transmitter, interface level transmitter,',
+    '               vibration transmitter, speed transmitter, density transmitter',
+    // §2 Flow measurement
+    'meter        : coriolis mass flowmeter (only true mass flow), magnetic flowmeter (magmeter,',
+    '               electromagnetic flowmeter — needs conductive fluid ≥5 µS/cm), vortex flowmeter',
+    '               (vortex shedding meter, Strouhal meter — standard for steam), transit-time',
+    '               ultrasonic (clamp-on, time-of-flight), positive displacement meter (PD meter,',
+    '               oval gear meter — best for viscous liquids), turbine meter, flow meter',
+    'element      : orifice plate (square-edge orifice, DP orifice, restriction plate),',
+    '               averaging pitot tube (Annubar — Emerson trade name, multi-port pitot),',
+    '               venturi tube, venturi nozzle, flow nozzle, pitot tube, restriction orifice,',
+    '               flow element (FE tag); also: thermocouple, RTD (PT100, Pt1000, resistance',
+    '               temperature detector, resistance thermometer, PRT), thermowell (protection tube,',
+    '               thermometer well), temperature element (TE tag), pressure element (PE tag)',
+    // §3 Level measurement
+    '               GWR = guided wave radar = TDR; NCR = non-contacting radar = free-space radar;',
+    '               displacer (buoyancy transmitter — do NOT confuse with float switch)',
+    // §4 Pressure measurement
+    'indicator    : FI/PI/TI/LI/FG/PG/LG — local read-out, no signal output;',
+    '               synonyms: pressure gauge, Bourdon gauge, Bourdon tube, dial gauge, local gauge,',
+    '               mechanical gauge, thermometer (local), level gauge, sight glass, gauge glass,',
+    '               level bridle; flow indicator, pressure indicator, temperature indicator',
+    // §5 Temperature
+    '               RTD = resistance temperature detector = PT100 = Pt1000 = PRT;',
+    '               thermocouple (TC) synonyms: thermoelectric sensor, Seebeck element;',
+    '               thermowell synonyms: protection tube, thermometer well, instrument well',
+    // §6 Process control
+    'controller   : FIC/PIC/TIC/LIC/AIC — DCS/panel, receives PV, outputs CO to final element;',
+    '               synonyms: flow indicating controller, pressure indicating controller,',
+    '               temperature indicating controller, level indicating controller,',
+    '               cascade controller (master-slave, outer-inner loop),',
+    '               split-range controller (split range, dual valve, sequenced valve),',
+    '               feedforward controller (disturbance compensation, anticipative control),',
+    '               override controller (select control, high select / low select, auctioneering),',
+    '               ratio controller, flow ratio controller, PID controller, controller',
+    'recorder     : FR/PR/TR/LR — chart recorder, data recorder, recorder',
+    // §7 Control valves
+    'valve        : control valve (globe/rotary/butterfly/three-way), gate valve, ball valve,',
+    '               anti-surge valve, non-return valve, check valve, swing check, NRV;',
+    '               Fail Open (FO) = air-to-close (ATC); Fail Closed (FC) = air-to-open (ATO)',
+    // §8 Safety
+    'switch       : FS/PS/TS/LS + H/L/HH/LL — trip/shutdown switches;',
+    '               synonyms: pressure switch high (PSH), pressure switch low (PSL),',
+    '               level switch high high (LSHH), level switch low low (LSLL),',
+    '               flow switch, temperature switch, safety shutdown switch, trip switch',
+    'analyzer     : gas chromatograph (online GC), pH analyzer (pH meter, pH probe),',
+    '               oxygen analyzer (O2 analyzer), CO2 analyzer, moisture analyzer,',
+    '               gas analyzer, online analyzer, quality transmitter (QT)',
   ].join('\n');
 
   const _LLM_SYSTEM = [
