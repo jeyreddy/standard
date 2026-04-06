@@ -10,7 +10,7 @@ YMPL is a **JavaScript SDK**. You interact with it by reading/editing `ympl.js` 
 
 ### Run tests after every change
 ```bash
-cd C:\ensim\ympl
+cd C:\ympl
 node test.js
 ```
 All tests must pass. Do not commit if any test fails.

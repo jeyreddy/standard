@@ -19,7 +19,7 @@ This is the **canonical project folder**. All work happens here.
 ## Folder contents
 
 ```
-C:\ensim\ympl\
+C:\ympl\
 ├── ympl.js              ← the codec — single portable file, all logic here
 ├── ympl_viewer.html     ← browser test viewer
 ├── YMPL_SPEC.md         ← format specification (schema, rules, versioning)
@@ -30,14 +30,14 @@ C:\ensim\ympl\
 └── node_modules\js-yaml
 ```
 
-**Do not** reference or import anything from `C:\ensim\ympl-standalone-sdk\`. That folder is the old multi-file SDK and has been superseded.
+**Do not** reference or import anything from `C:\ympl-standalone-sdk\`. That folder is the old multi-file SDK and has been superseded.
 
 ---
 
 ## Run tests
 
 ```bash
-cd C:\ensim\ympl
+cd C:\ympl
 node test.js
 ```
 
@@ -191,7 +191,7 @@ YMPL.toMermaid(doc)    // doc → Mermaid flowchart LR string
 
 ## What NOT to do
 
-- Do not import or reference files from `C:\ensim\ympl-standalone-sdk\`
+- Do not import or reference files from `C:\ympl-standalone-sdk\`
 - Do not split logic into multiple files — ympl.js is intentionally one portable file
 - Do not add Python code — this module is JS only
 - Do not add external runtime dependencies beyond js-yaml

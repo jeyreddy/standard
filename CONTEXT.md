@@ -1,6 +1,6 @@
 # YMPL Project — Full Context Export
 > Copy this file into any AI tool (Claude.ai, ChatGPT, Gemini, etc.) to give it complete project understanding.
-> Generated from live codebase · C:\ensim\ympl · April 2026
+> Generated from live codebase · C:\ympl · April 2026
 
 ---
 
@@ -354,7 +354,7 @@ See `scenarios/hydrotreater.yaml` — two-feed hydrotreater with:
 
 ---
 
-## Files in C:\ensim\ympl\
+## Files in C:\ympl\
 
 ```
 ympl.js              ← THE codec — single portable file, all logic
@@ -379,7 +379,7 @@ scenarios/
 - Do not add Python code — JS only
 - Do not add runtime dependencies beyond js-yaml
 - Do not use `mainPath[]` schema — schema is `nodes[]` + `edges[]`
-- Do not reference `C:\ensim\ympl-standalone-sdk\` — that is the old superseded SDK
+- Do not reference `C:\ympl-standalone-sdk\` — that is the old superseded SDK
 - Do not modify the YMPL 1.0 schema without updating YMPL_SPEC.md and test.js
 - All 35+ tests in test.js must pass after every change
 
