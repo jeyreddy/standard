@@ -109,8 +109,14 @@
       'floating roof tank', 'fixed roof tank', 'atmospheric tank',
       'chemical dosing tank', 'day tank', 'slop tank', 'hot well', 'sump',
       'gas cylinder', 'cylinder', 'drum', 'tank', 'vessel',
+      'desalter', 'vacuum unit',
     ],
-    // 9. Inline measurement devices (physical, in-pipe)
+    // 9. Relief devices — PSVs, rupture discs, conservation vents
+    relief: [
+      'pressure safety valve', 'pressure relief valve', 'safety relief valve',
+      'safety valve', 'relief valve', 'rupture disc', 'conservation vent',
+    ],
+    // 10. Inline measurement devices (physical, in-pipe)
     meter: [
       'coriolis mass flowmeter', 'coriolis meter',
       'magnetic flowmeter', 'electromagnetic flowmeter',
@@ -215,12 +221,17 @@
     r:    'reactor',
     p:    'pump',
     k:    'compressor',
-    cv:   'valve', fv:  'valve', lv: 'valve', pv: 'valve',
-    tv:   'valve', hv:  'valve', xv: 'valve', sv: 'valve',
+    f:    'filter',      // F-xxx: multimedia filter, strainer, etc.
+    cv:   'valve', fv:  'valve', lv:  'valve', pv:  'valve',
+    tv:   'valve', hv:  'valve', xv:  'valve', sv:  'valve',
+    tcv:  'valve', fcv: 'valve', lcv: 'valve', sdv: 'valve', bcv: 'valve', bpv: 'valve',
+    // ── Relief devices ────────────────────────────────────────────────────────
+    psv:  'relief', prv: 'relief',
     t:    'vessel', h:  'vessel',
     // ── ISA 5.1 Transmitters  xT ─────────────────────────────────────────────
     ft:   'transmitter', pt:  'transmitter', tt:  'transmitter', lt: 'transmitter',
     at:   'transmitter', dt:  'transmitter', st:  'transmitter', wt: 'transmitter',
+    l:    'transmitter',  // L-xxx: bare level transmitter (non-standard but common)
     // ── ISA 5.1 Controllers   xC, xIC ────────────────────────────────────────
     fc:   'controller',  pic: 'controller',  tic: 'controller', lic: 'controller',
     fic:  'controller',  pc:  'controller',  tc:  'controller', lc:  'controller',
@@ -237,12 +248,46 @@
     psh:  'switch',  psl:  'switch',  pshh: 'switch',  psll: 'switch',
     tsh:  'switch',  tsl:  'switch',  tshh: 'switch',  tsll: 'switch',
     lsh:  'switch',  lsl:  'switch',  lshh: 'switch',  lsll: 'switch',
+    // ── ISA 5.1 Alarm / trip tags (xAH / xAL / xAHH / xALL → switch kind) ───
+    pah:  'switch',  pal:  'switch',  pahh: 'switch',  pall: 'switch',
+    tah:  'switch',  tal:  'switch',  tahh: 'switch',  tall: 'switch',
+    lah:  'switch',  lal:  'switch',  lahh: 'switch',  lall: 'switch',
+    fah:  'switch',  fal:  'switch',
     // ── ISA 5.1 Primary elements  xE ─────────────────────────────────────────
     fe:   'element', pe:   'element', te:   'element', le:   'element',
     fm:   'element',
     // ── Analyzers ─────────────────────────────────────────────────────────────
     qt:   'analyzer', ph:  'analyzer',
+    // ── Additional explicit prefixes (ISA 5.1 + common field usage) ──────────
+    hs:   'switch',       // Hand switch / hand station
+    vt:   'transmitter',  // Vibration transmitter
+    jt:   'valve',        // JT expansion valve (auto-refrigeration)
+    mt:   'transmitter',  // Moisture transmitter
+    yt:   'transmitter',  // Position transmitter (DCS usage)
+    sic:  'controller',   // Secondary/slave indicator controller
+    cs:   'meter',        // Pipeline segment — treat as meter
   };
+
+  // ISA 5.1 algorithmic tag-kind resolution.
+  // TAG_KIND is checked first (explicit wins); then last-letter rules apply.
+  function resolveTagKind(prefix) {
+    const p = prefix.toLowerCase();
+    if (TAG_KIND[p] !== undefined) return TAG_KIND[p];
+    // Alarm/trip suffix patterns (xAH, xAL, xAHH, xALL)
+    if (p.endsWith('ahh') || p.endsWith('all')) return 'switch';
+    if (p.endsWith('ah')  || p.endsWith('al'))  return 'switch';
+    // Last-letter ISA 5.1 rules
+    const last = p[p.length - 1];
+    if (last === 'c') return 'controller';
+    if (last === 't') return 'transmitter';
+    if (last === 'v') return 'valve';
+    if (last === 's') return 'switch';
+    if (last === 'e') return 'element';
+    if (last === 'i') return 'indicator';
+    if (last === 'r') return 'recorder';
+    if (last === 'y') return 'controller';
+    return null;
+  }
 
   // Build sorted term list (longest first for greedy left-to-right match)
   const SORTED_TERMS = [];
@@ -287,14 +332,56 @@
     'around','across','between','alongside','inside','outside','above','below',
     'connected','fed','sent','routed','pumped','flows','feeds','also','just',
     'only','any','all','some','no','not','each','both','either','here','there',
+    'suction','discharge','inlet','outlet',
+    // ── Action verbs: prevent spurious "Maintains Reactor", "Cools Reactor" etc.
+    'maintains','maintain','maintaining',
+    'monitors','monitor','monitoring',
+    'prevents','prevent','preventing',
+    'ensures','ensure','ensuring',
+    'measures','measure','measuring',
+    'exits','exit','exiting',
+    'vents','vent','venting',
+    'control','controls','controlling',
+    'provides','provide','providing',
+    'using','uses',
+    'enters','entering',
+    'leaves','leaving',
+    'transfers','transfer',
+    'processes','process',
+    'removes','remove','removing',
+    'separates','separate','separating',
+    'generates','generate',
+    'requires','require',
+    'reduces','reduce',
+    'increases','increase',
+    'accepts','accept',
+    'supplies','supply',
+    'performs','perform',
+    'cools','cool','cooling',
+    'heats','heat','heating',
+    'treats','treat','treating',
+    'absorbs','absorb','absorbing',
+    'strips','strip','stripping',
+    'compresses','compress','compressing',
+    'condensates','condenses','condense',
+    'evaporates','evaporate',
+    'recycles','recirculates',
+    'isolates','isolate',
+    'protects','protect',
+    'regulates','regulate',
+    'connects','connect',
+    'receives','receive',
   ]);
 
   // ─── NORMALIZER ────────────────────────────────────────────────────────────
 
   const TYPOS = [
+    // Arrow separators (ISA tag chains drawn with Unicode arrows)
+    [/→/g, ' '],
     // Pumps
     [/\bpumpp\b/gi, 'pump'],
     [/\bpump s\b/gi, 'pump'],
+    [/\bcntrifugal\b/gi, 'centrifugal'],
     // Valves
     [/\bvalev\b/gi, 'valve'],
     [/\bvalv\b/gi, 'valve'],
@@ -331,6 +418,7 @@
     [/\bcondencer\b/gi, 'condenser'],
     [/\bcondnsr\b/gi, 'condenser'],
     [/\bcondser\b/gi, 'condenser'],
+    [/\bcondensor\b/gi, 'condenser'],
     // Reboilers
     [/\brebolier\b/gi, 'reboiler'],
     [/\breboler\b/gi, 'reboiler'],
@@ -372,6 +460,8 @@
     [/\bconected\b|\bconnnected\b/gi, 'connected'],
     [/\bchengvalve\b|\bcheck\s*valle\b/gi, 'check valve'],
     [/\bpump\s+bypass\b|\bcompressor\s+bypass\b/gi, 'bypass'],
+    // "reactor feed drum" → "feed drum" (reactor as adjective before vessel)
+    [/\breactor\s+feed\b/gi, 'feed'],
     // Recycle / bypass
     [/\brecyle\b|\breycle\b|\breycycle\b/gi, 'recycle'],
     [/\blnie\b/gi, 'line'],
@@ -493,14 +583,32 @@
           const pre = i === 0 || /[\s,;.()\-\/]/.test(text[i - 1]);
           if (pre) {
             const prefix = tagM[1].split('-')[0].toLowerCase();
-            const kind   = TAG_KIND[prefix];
+            let kind     = resolveTagKind(prefix);
             if (kind) {
               let overlap = false;
               for (let j = i; j < i + tagM[1].length; j++) { if (used[j]) { overlap = true; break; } }
               if (!overlap) {
-                for (let j = i; j < i + tagM[1].length; j++) used[j] = 1;
+                // ── Description-first override: check text immediately after tag ──
+                // If a recognised KINDS term follows within 1-4 words, its kind
+                // takes precedence over the TAG_KIND prefix default.
+                // E.g. "F-401 fired heater" → heat_exchanger (not filter).
+                let scanEnd = i + tagM[1].length;
+                const afterTag = lower.slice(scanEnd);
+                // Extract up to 4 words after the tag (stop at sentence punctuation).
+                const wordM = afterTag.match(/^(\s+[a-z][a-z0-9\-]*(?:\s+[a-z][a-z0-9\-]*){0,3})/);
+                if (wordM) {
+                  const descLow = wordM[1].trim();
+                  for (const { term, kind: tk } of SORTED_TERMS) {
+                    if (descLow === term || descLow.startsWith(term + ' ') || descLow.startsWith(term + '\t')) {
+                      kind    = tk;
+                      scanEnd = scanEnd + wordM[1].indexOf(term) + term.length;
+                      break;
+                    }
+                  }
+                }
+                for (let j = i; j < scanEnd; j++) used[j] = 1;
                 found.push({ label: tagM[1].toUpperCase(), kind, start: i });
-                i += tagM[1].length;
+                i = scanEnd;
                 matched = true;
               }
             }
@@ -526,8 +634,13 @@
               pos++;
               if (pos >= len || !/[a-z]/.test(lower[pos])) break;
             }
+            const wordStart = wc === 0 ? i : spans[wc - 1].spanEnd + 1;
             while (pos < len && /[a-z0-9\-]/.test(lower[pos])) pos++;
             if (pos === (wc === 0 ? i : spans[wc-1].spanEnd + 1)) break;
+            // Don't extend the span through stop/connector words — prevents "pressure to"
+            // from fuzzy-matching "pressure tap" when "to" is a sentence connector.
+            const addedWord = lower.slice(wordStart, pos);
+            if (wc > 0 && LABEL_STOP.has(addedWord)) break;
             spans.push({ spanText: lower.slice(i, pos), spanEnd: pos });
           }
 
@@ -555,8 +668,21 @@
 
           if (bestTerm) {
             for (let j = i; j < bestEnd; j++) used[j] = 1;
-            found.push({ label: titleCase(bestTerm), kind: bestKind, start: i });
-            i = bestEnd;
+            let fuzzyLabel = titleCase(bestTerm);
+            let fuzzyEnd   = bestEnd;
+            // Look for a trailing ISA tag (same as in exact match branch)
+            const afterFuzzy = text.slice(bestEnd);
+            const fTagM = afterFuzzy.match(/^\s+([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\b/);
+            if (fTagM) {
+              const fPrefix = fTagM[1].split('-')[0].toLowerCase();
+              if (resolveTagKind(fPrefix)) {
+                fuzzyLabel = fTagM[1].toUpperCase();
+                fuzzyEnd   = bestEnd + fTagM[0].length;
+                for (let j = bestEnd; j < fuzzyEnd; j++) used[j] = 1;
+              }
+            }
+            found.push({ label: fuzzyLabel, kind: bestKind, start: i });
+            i = fuzzyEnd;
             matched = true;
           }
         }
@@ -573,6 +699,108 @@
   }
 
   // ─── EDGE BUILDING ─────────────────────────────────────────────────────────
+
+  // anchorConnections — explicit prose flow edges (thin wrapper over _extractProseEdges).
+  // Called with mainFlow nodes so recycle-branch nodes are excluded.
+  function anchorConnections(nodes, text) {
+    return _extractProseEdges(nodes, normalize(text));
+  }
+
+  // detectFanOut — one source → multiple destinations from phase-split language.
+  // Patterns: "overhead from X to Y", "bottoms from X to Z", "vapor from X to Y"
+  function detectFanOut(nodes, text) {
+    const result  = [];
+    const lower   = text.toLowerCase();
+    const seenKey = new Set();
+    function addEdge(fromId, toId) {
+      const key = fromId + '>' + toId;
+      if (!seenKey.has(key)) { seenKey.add(key); result.push({ from: fromId, to: toId, kind: 'stream' }); }
+    }
+    // First capture: tag/label without spaces so "v-101 is recycled back" is not captured.
+    // Second capture: allows spaces for multi-word destination labels.
+    // The recycle guard below also catches sentences with recycle/back keywords.
+    const re = /\b(?:overhead|bottoms?|vapor|vapour|liquid|distillate|condensate|off[-\s]?gas|product)\s+(?:from|of)\s+([a-z][a-z0-9\-]+)\s+(?:to|into)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n!?]|$)/gi;
+    let m;
+    while ((m = re.exec(lower)) !== null) {
+      const fromLabel = m[1].trim();
+      const toLabel   = m[2].trim();
+      const fromN = nodes.find(n => matchesLabel(n.label, fromLabel));
+      const toN   = nodes.find(n => matchesLabel(n.label, toLabel));
+      if (fromN && toN && fromN.id !== toN.id) addEdge(fromN.id, toN.id);
+    }
+    return result;
+  }
+
+  // detectFanIn — multiple sources → one destination (combine/join/merge/mix).
+  // Pattern: "A and B combine/join/merge into C"
+  function detectFanIn(nodes, text) {
+    const result  = [];
+    const lower   = text.toLowerCase();
+    const seenKey = new Set();
+    function addEdge(fromId, toId) {
+      const key = fromId + '>' + toId;
+      if (!seenKey.has(key)) { seenKey.add(key); result.push({ from: fromId, to: toId, kind: 'stream' }); }
+    }
+    const re = /\b([a-z][a-z0-9\-]+)\s+and\s+([a-z][a-z0-9\-]+)\s+(?:combine|join|merge|converge|mix)(?:\s+(?:into|to|at))?\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n!?]|$)/gi;
+    let m;
+    while ((m = re.exec(lower)) !== null) {
+      const a = m[1].trim(), b = m[2].trim(), c = m[3].trim();
+      const nA = nodes.find(n => matchesLabel(n.label, a));
+      const nB = nodes.find(n => matchesLabel(n.label, b));
+      const nC = nodes.find(n => matchesLabel(n.label, c));
+      if (nA && nC && nA.id !== nC.id) addEdge(nA.id, nC.id);
+      if (nB && nC && nB.id !== nC.id) addEdge(nB.id, nC.id);
+    }
+    return result;
+  }
+
+  // detectParallelTrains — replicate stream edges for A/B twin nodes.
+  // e.g. P-101A and P-101B: if P-101A has edges, mirror them for P-101B.
+  function detectParallelTrains(nodes, edges) {
+    const result  = [];
+    const seenKey = new Set(edges.map(e => e.from + '>' + e.to));
+    for (const nodeA of nodes) {
+      const mA = nodeA.label.match(/^([A-Za-z]{1,5}-\d{2,4})([A-Ba-b])$/);
+      if (!mA) continue;
+      const base = mA[1], suffA = mA[2].toUpperCase();
+      if (suffA !== 'A') continue;
+      const nodeB = nodes.find(n => n.label.toUpperCase() === base + 'B');
+      if (!nodeB) continue;
+      for (const e of edges) {
+        if (e.kind !== 'stream') continue;
+        if (e.from === nodeA.id) {
+          const key = nodeB.id + '>' + e.to;
+          if (!seenKey.has(key) && e.to !== nodeB.id) { seenKey.add(key); result.push({ from: nodeB.id, to: e.to, kind: 'stream' }); }
+        }
+        if (e.to === nodeA.id) {
+          const key = e.from + '>' + nodeB.id;
+          if (!seenKey.has(key) && e.from !== nodeB.id) { seenKey.add(key); result.push({ from: e.from, to: nodeB.id, kind: 'stream' }); }
+        }
+      }
+    }
+    return result;
+  }
+
+  // implicitChain — sequential fill-in for nodes with no existing outgoing stream edge.
+  // Only adds A→B when A has no outgoing stream edge, preventing override of anchors.
+  function implicitChain(mainFlow, existingEdges) {
+    const result     = [];
+    const seenKey    = new Set(existingEdges.map(e => e.from + '>' + e.to));
+    const hasOutgoing = new Set(
+      existingEdges.filter(e => e.kind === 'stream' || !e.kind).map(e => e.from)
+    );
+    for (let i = 0; i < mainFlow.length - 1; i++) {
+      const fromId = mainFlow[i].id;
+      const toId   = mainFlow[i + 1].id;
+      const key    = fromId + '>' + toId;
+      if (!seenKey.has(key) && !hasOutgoing.has(fromId)) {
+        seenKey.add(key);
+        hasOutgoing.add(fromId);
+        result.push({ from: fromId, to: toId, kind: 'stream' });
+      }
+    }
+    return result;
+  }
 
   function buildEdges(nodes, text) {
     if (nodes.length < 2) return [];
@@ -591,14 +819,31 @@
       if (viaNode) recycleBranch.add(viaNode.id);
     }
 
-    // ── Step 2: Sequential stream edges (main flow only) ─────────────────────
     const mainFlow = nodes.filter(n => !recycleBranch.has(n.id));
-    for (let i = 0; i < mainFlow.length - 1; i++) {
-      edges.push({ from: mainFlow[i].id, to: mainFlow[i + 1].id, kind: 'stream' });
+
+    // ── Step 2a: Anchor connections — explicit prose-directed edges ──────────
+    for (const e of anchorConnections(mainFlow, text)) {
+      if (!edges.some(x => x.from === e.from && x.to === e.to)) edges.push(e);
     }
 
-    // ── Step 3: Bypass — pattern A: "bypass [line|pipe|loop] around/over/across X"
-    const bypassRe = /(?:bypass(?:\s+(?:line|pipe|loop|valve))?|parallel\s+path|alternative\s+route|crossover)\s+(?:around|over|across)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
+    // ── Step 2b: Fan-out — phase-split / overhead-bottoms patterns ───────────
+    for (const e of detectFanOut(mainFlow, text)) {
+      if (!edges.some(x => x.from === e.from && x.to === e.to)) edges.push(e);
+    }
+
+    // ── Step 2c: Fan-in — combine / join / merge patterns ───────────────────
+    for (const e of detectFanIn(mainFlow, text)) {
+      if (!edges.some(x => x.from === e.from && x.to === e.to)) edges.push(e);
+    }
+
+    // ── Step 2d: Parallel trains — A/B suffix replication ───────────────────
+    for (const e of detectParallelTrains(mainFlow, edges)) {
+      if (!edges.some(x => x.from === e.from && x.to === e.to)) edges.push(e);
+    }
+
+    // ── Step 3: Bypass — pattern A: "bypass [line|pipe|loop] [goes] around/over/across X"
+    // Allows 0-2 optional words between "bypass line" and "around" (e.g. "bypass line goes around").
+    const bypassRe = /(?:bypass(?:\s+(?:line|pipe|loop|valve))?|parallel\s+path|alternative\s+route|crossover)(?:\s+\w+){0,2}\s+(?:around|over|across)\s+([a-z][a-z0-9\s\-]*?)(?=\s*(?:directly|from|via|then|[,.\n])|$)/gi;
     while ((m = bypassRe.exec(lower)) !== null) {
       const anchor = m[1].trim();
       const target = mainFlow.find(n => matchesLabel(n.label, anchor));
@@ -613,7 +858,10 @@
     //   Patterns:  B: "[node] with [a] bypass"
     //              C: "[node] has [a] bypass"
     //              D: "bypass [line] for/on [node]"
-    //   To find upstream/downstream: walk the stream edges already built.
+    //   Uses stream edges already in place (from anchor + sequential fill below).
+    // Build a temporary sequential fill so bypass B/C/D can find up/downstream.
+    const tempFill = implicitChain(mainFlow, edges);
+    const edgesForBypass = [...edges, ...tempFill];
     for (const targetNode of mainFlow) {
       const nl = escRe(targetNode.label.toLowerCase());
       const patB = new RegExp('\\b' + nl + '\\s+with\\s+(?:a\\s+|the\\s+)?bypass\\b');
@@ -621,16 +869,30 @@
       const patD = new RegExp('\\bbypass(?:\\s+(?:line|pipe|loop|valve))?\\s+(?:for|on)\\s+(?:a\\s+|the\\s+)?' + nl + '\\b');
       if (!patB.test(lower) && !patC.test(lower) && !patD.test(lower)) continue;
       // Find the stream-upstream and stream-downstream nodes via built edges
-      const upEdge   = edges.find(e => e.to   === targetNode.id && (!e.kind || e.kind === 'stream'));
-      const downEdge = edges.find(e => e.from === targetNode.id && (!e.kind || e.kind === 'stream'));
+      const upEdge   = edgesForBypass.find(e => e.to   === targetNode.id && (!e.kind || e.kind === 'stream'));
+      const downEdge = edgesForBypass.find(e => e.from === targetNode.id && (!e.kind || e.kind === 'stream'));
       if (!upEdge || !downEdge) continue;
       if (!edges.some(e => e.from === upEdge.from && e.to === downEdge.to && e.kind === 'bypass')) {
         edges.push({ from: upEdge.from, to: downEdge.to, kind: 'bypass', label: 'Bypass' });
       }
     }
 
-    // ── Step 5a: Recycle — existing pattern "recycle line back to [anchor]"
-    const recycleRe = /(?:recycle(?:\s+(?:stream|loop|pipe|line))?|product\s+recycle|return\s+line|recirculation\s+line)\s+(?:to|back\s+to|return\s+to|around)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
+    // ── Step 5a: Recycle — patterns: "recycled back to", "recycle to", "returned to", etc.
+    // "recycles [from X] back to Y" — antisurge / instrument-mediated recycle
+    const recyclesRe = /\brecycles\s+(?:from\s+[a-z][a-z0-9\s\-]*?)?\s*back\s+to\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
+    while ((m = recyclesRe.exec(lower)) !== null) {
+      const anchor = m[1].trim();
+      const target = nodes.find(n => matchesLabel(n.label, anchor));
+      if (!target) continue;
+      // FROM node: look for an ISA tag immediately before "recycles" in the text
+      const before = lower.slice(0, m.index);
+      const tagM2  = before.match(/([a-z]{1,5}-\d{2,4}[a-z]?)\s*$/i);
+      const fromNode = tagM2 ? nodes.find(n => n.label.toUpperCase() === tagM2[1].toUpperCase()) : null;
+      if (!fromNode) continue;   // only add recycle when source is explicitly identified
+      edges.push({ from: fromNode.id, to: target.id, kind: 'recycle', label: 'Recycle' });
+    }
+
+    const recycleRe = /(?:recycled?\s+(?:(?:stream|loop|pipe|line)\s+)?|recirculation\s+(?:line\s+)?|recirculated\s+|product\s+recycle\s+|return\s+line\s+|returned\s+)\s*(?:to|back\s+to|return\s+to|around)\s+([a-z][a-z0-9\s\-]*?)(?=\s*[,.\n]|$)/gi;
     while ((m = recycleRe.exec(lower)) !== null) {
       const anchor = m[1].trim();
       const target = nodes.find(n => matchesLabel(n.label, anchor));
@@ -674,6 +936,13 @@
       }
     }
 
+    // ── Step 6: Fill remaining sequential gaps ───────────────────────────────
+    // Only adds A→B when A has no existing outgoing stream edge, so anchor
+    // connections are never overridden by the sequential fill-in.
+    for (const e of implicitChain(mainFlow, edges)) {
+      edges.push(e);
+    }
+
     return edges;
   }
 
@@ -683,7 +952,10 @@
     if (nl === ss || nl.includes(ss) || ss.includes(nl)) return true;
     // Fuzzy fallback: allow edit distance ≤ 2 so typo'd anchors in recycle/bypass
     // phrases still resolve to the correct (canonical-label) node.
-    if (ss.length >= 5 && Math.abs(nl.length - ss.length) <= 3) {
+    // Skip fuzzy when either string is an ISA tag (letter-hyphen-digits) — tags like
+    // P-101 and E-101 differ by only one char so would incorrectly match each other.
+    const ISA_TAG_RE = /^[a-z]{1,5}-\d{2,4}[a-z]?$/;
+    if (!ISA_TAG_RE.test(nl) && !ISA_TAG_RE.test(ss) && ss.length >= 5 && Math.abs(nl.length - ss.length) <= 3) {
       if (levenshtein(nl, ss, 2) <= 2) return true;
     }
     return false;
@@ -797,16 +1069,34 @@
       }
     }
 
-    // ── Pattern 2c: bare "A to B" / "A through B" / "A into B" ─────────────
-    // Handles: "flash drum to trim cooler to product tank" (no leading "from").
-    // No sink pinning — these are ordering constraints only.
-    const BARE_CONN = '\\s+(?:to|through|into|toward)\\s+';
+    // ── Pattern 2b-extended: "A enters/is supplied to/is received by B" ───────
+    // "X enters A [from B]" → B→A (A is destination, B is source)
     for (let i = 0; i < nodes.length; i++) {
       const ar = escRe(nodes[i].label.toLowerCase());
       for (let j = 0; j < nodes.length; j++) {
         if (i === j) continue;
         const br = escRe(nodes[j].label.toLowerCase());
-        if (new RegExp('\\b' + ar + BARE_CONN + br + '\\b').test(lower)) {
+        // "A ... from [desc] B" where the sentence has an "enters/feeds/goes to" verb
+        const reEnters = new RegExp('\\b(?:enters?|goes\\s+(?:to|into)|is\\s+(?:fed|supplied)\\s+(?:to|into))\\s+(?:[\\w][\\w-]*\\s+){0,3}' + ar + '\\b[^.]*?\\bfrom\\s+(?:[\\w][\\w-]*\\s+){0,4}' + br + '\\b');
+        if (reEnters.test(lower)) addPair(nodes[j].id, nodes[i].id, false);
+      }
+    }
+
+    // ── Pattern 2c: bare "A [opt] to/through/then [opt] B" ─────────────────
+    // Handles: "flash drum to trim cooler to product tank" (no leading "from").
+    // Extended to allow up to 2 optional words before the connector and up to
+    // 4 optional words after it — handles "P-101 to mixer M-101" and
+    // "C-101 bottom to rich amine flash drum V-101".
+    // Excludes pairs where the connecting text contains recycle/back keywords.
+    // No sink pinning — these are ordering constraints only.
+    const BARE_CONN_RE = '((?:\\s+\\w+){0,2}\\s+(?:to|through|into|toward|then)\\s+(?:\\w+\\s+){0,4})';
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        const m2c = new RegExp('\\b' + ar + BARE_CONN_RE + br + '\\b').exec(lower);
+        if (m2c && !/recycle|recircul|return(?:ed)?\s+to|\bback\b/i.test(m2c[1])) {
           addPair(nodes[i].id, nodes[j].id, false);
         }
       }
@@ -873,25 +1163,67 @@
 
   // ─── PARSE ─────────────────────────────────────────────────────────────────
 
+  // Set of canonical kind-name labels (lowercase). A node whose label IS one of
+  // these AND whose kind matches another tagged node is treated as a duplicate.
+  const _KIND_NAMES = new Set([
+    'pump','valve','compressor','reactor','column','separator','vessel','drum','tank',
+    'exchanger','cooler','heater','condenser','reboiler','filter','meter',
+    'transmitter','controller','indicator','switch','analyzer','element','recorder',
+    // Additional single-word synonyms that appear as spurious duplicates
+    'absorber','stripper','extractor','fractionator','splitter','scrubber',
+    'distillation','fractionation','evaporator','crystallizer',
+    // Instrumentation short forms
+    'rtd','thermocouple','thermowell','orifice','pitot',
+  ]);
+
   // Remove bare single-word back-references to equipment already found.
-  // e.g. "Single Tube Reactor … the reactor effluent" → "Reactor" is removed
-  // because it is a bare back-reference to the earlier "Single Tube Reactor".
-  // Multi-word labels are never removed — two "Flash Drum" nodes are kept.
+  // Also removes single-word canonical kind labels (e.g. "Valve") when a
+  // tagged node of the same kind already exists (e.g. FCV-101).
   function deduplicateNodes(nodes) {
     const result = [];
     for (const n of nodes) {
       if (n.label.indexOf(' ') === -1) {   // single-word label only
         const lc = n.label.toLowerCase();
-        const isDup = result.some(prev =>
+        // Back-reference: earlier longer label of same kind contains this label
+        const isBackRef = result.some(prev =>
           prev.kind === n.kind &&
           prev.label !== n.label &&
           prev.label.toLowerCase().includes(lc)
         );
-        if (isDup) continue;
+        if (isBackRef) continue;
+        // Generic kind-name: label is a canonical kind word AND a tagged node
+        // of the same kind already exists (ISA tag label contains a dash).
+        if (_KIND_NAMES.has(lc)) {
+          const hasTagged = result.some(prev =>
+            prev.kind === n.kind &&
+            prev.label.includes('-')
+          );
+          if (hasTagged) continue;
+        }
       }
       result.push(n);
     }
-    return result;
+    // Two-pass: remove generic kind-name labels when ANY tagged same-kind node
+    // exists anywhere in the result (catches "Valve" before FCV-101 ordering).
+    const allTaggedKinds = new Set(result.filter(n => n.label.includes('-')).map(n => n.kind));
+    return result.filter(n => {
+      const lc = n.label.toLowerCase();
+      if (n.label.indexOf(' ') !== -1) {
+        // Multi-word instrument/valve/relief labels (e.g. "Pressure Transmitter",
+        // "Flow Control Valve") are always spurious description nodes when an ISA-tagged
+        // node of the same kind already exists. Equipment multi-word labels (e.g.
+        // "Reflux Drum", "Suction Drum") may represent distinct untagged equipment — kept.
+        const DEDUP_MULTI_KINDS = new Set([
+          ..._INSTR_KINDS, 'valve', 'checkvalve', 'relief',
+        ]);
+        if (DEDUP_MULTI_KINDS.has(n.kind) && !n.label.includes('-') && allTaggedKinds.has(n.kind)) {
+          return false;
+        }
+        return true;
+      }
+      if (_KIND_NAMES.has(lc) && allTaggedKinds.has(n.kind)) return false;
+      return true;
+    });
   }
 
   // Reclassify stream edges as 'signal' when both endpoints are instruments,
@@ -909,8 +1241,367 @@
     });
   }
 
+  // ─── STRUCTURED SECTION PARSER ────────────────────────────────────────────
+  // When input contains Equipment: / Instruments: sections with "- TAG: desc"
+  // entries, parse them as authoritative node definitions.  Tag ID = label,
+  // description text = kind hint.  Returns null when no sections are present.
+
+  function _inferKindFromDesc(desc) {
+    const low = desc.toLowerCase();
+    for (const { term, kind } of SORTED_TERMS) {
+      if (low.includes(term)) return kind;
+    }
+    return null;
+  }
+
+  function _parseStructuredSections(text) {
+    const equipMatch = text.match(/\bEquipment\s*:([\s\S]*?)(?=\n\s*\n|\bInstruments?\s*:|$)/i);
+    const instrMatch = text.match(/\bInstruments?\s*:([\s\S]*?)$/i);
+    if (!equipMatch && !instrMatch) return null;
+
+    // Parse "- TAG-ID: description …" items — supports both newline- and
+    // space-separated lists.  Description stops at the next "- TAG:" entry or
+    // at a blank line (prevents prose from bleeding into last item's desc).
+    function parseItems(block) {
+      const items = [];
+      const re = /-\s*([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\s*:\s*(.*?)(?=\s*-\s*[A-Za-z]{1,5}-\d{2,4}[A-Za-z]?\s*:|\n\s*\n|$)/gs;
+      let m;
+      while ((m = re.exec(block)) !== null) {
+        items.push({ tag: m[1].toUpperCase(), desc: m[2].trim() });
+      }
+      return items;
+    }
+
+    const equipmentNodes = [];
+    const instrumentNodes = [];
+    const signalChains = [];   // [{controllerTag, sourceTag, finalTag}]
+
+    if (equipMatch) {
+      for (const { tag, desc } of parseItems(equipMatch[1])) {
+        const prefix  = tag.split('-')[0].toLowerCase();
+        // Description-first: engineer's description is more precise than tag prefix.
+        const descKind = _inferKindFromDesc(desc);
+        const kind     = descKind || resolveTagKind(prefix) || 'vessel';
+        equipmentNodes.push({ tag, kind });
+      }
+    }
+
+    if (instrMatch) {
+      for (const { tag, desc } of parseItems(instrMatch[1])) {
+        const prefix = tag.split('-')[0].toLowerCase();
+        const kind   = resolveTagKind(prefix) || _inferKindFromDesc(desc) || 'transmitter';
+        instrumentNodes.push({ tag, kind });
+        // Signal chain: "SRC-TAG to FINAL-TAG" in a controller/switch description.
+        // Three cases:
+        //   a) Normal:  SRC(transmitter/switch) to FINAL(valve) → SRC→CTRL→FINAL
+        //   b) Cascade: MASTER(controller) to THIS(controller)  → MASTER→THIS (no self-loop)
+        //   c) Element: SRC(element) to FINAL(valve)           → CTRL→FINAL only (sequential handles SRC→CTRL)
+        if (kind === 'controller' || kind === 'switch') {
+          const chainM = desc.match(/\b([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\s+to\s+([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\b/i);
+          if (chainM) {
+            const src  = chainM[1].toUpperCase();
+            const fin  = chainM[2].toUpperCase();
+            signalChains.push({
+              controllerTag: tag,
+              sourceTag:     src,
+              finalTag:      fin,
+              // Mark cascade: if final === this controller (slave pointing to itself)
+              isCascade:     fin === tag.toUpperCase(),
+            });
+          }
+        }
+      }
+    }
+
+    // Extract prose: all text OUTSIDE Equipment: and Instruments: sections.
+    // Handles both "prose → Instruments:" and "Equipment: … blank … prose" layouts.
+    const proseText = text
+      .replace(/\bEquipment\s*:[\s\S]*?(?=\n\s*\n|\bInstruments?\s*:|$)/gi, '')
+      .replace(/\bInstruments?\s*:[\s\S]*$/gi, '')
+      .trim();
+
+    // Also capture the Equipment: section text for edge-building fallback
+    // when proseText is empty (Equipment: starts the input with no preceding prose).
+    const equipmentText = equipMatch ? equipMatch[1].trim() : '';
+
+    return { equipmentNodes, instrumentNodes, signalChains, proseText, equipmentText };
+  }
+
+  // Remove transitive edges: if A→B and B→C both exist, A→C is redundant.
+  function _removeTransitiveEdges(pairs) {
+    const pairSet = new Set(pairs.map(p => p.from + '>' + p.to));
+    return pairs.filter(p => {
+      const hasIntermediate = pairs.some(q =>
+        q.from === p.from && q.to !== p.to && pairSet.has(q.to + '>' + p.to)
+      );
+      return !hasIntermediate;
+    });
+  }
+
+  // Extract prose-derived directed pairs from the directed-pair logic used in
+  // reorderNodes. Uses the same flow-verb and positional patterns.
+  function _extractProseEdges(nodes, prose) {
+    if (nodes.length < 2) return [];
+    const lower   = prose.toLowerCase();
+    const pairs   = [];
+    const seenKey = new Set();
+
+    function addPair(fromId, toId) {
+      const key = fromId + '>' + toId;
+      if (key !== toId + '>' + fromId && !seenKey.has(key)) {  // no self-loops, no dups
+        seenKey.add(key);
+        pairs.push({ from: fromId, to: toId });
+      }
+    }
+
+    const OPT2 = '(?:[\\w][\\w-]*\\s+){0,2}';
+
+    // Pattern 1: "from A to B" — skip if connecting text contains recycle/back keywords
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        const re1 = new RegExp('\\bfrom\\s+' + ar + '\\b([^.]*?)\\bto\\s+(?:\\w+\\s+){0,3}' + br + '\\b');
+        const m1  = re1.exec(lower);
+        if (m1 && !/recycle|recircul|return(?:ed)?\s+to|\bback\b/i.test(m1[1])) {
+          addPair(nodes[i].id, nodes[j].id);
+        }
+      }
+    }
+
+    // Pattern 2: flow-verb pairs — allow up to 2 descriptor words between verb and target
+    const FLOW_VERBS =
+      'feeds?(?:\\s+into)?|' +
+      '(?:flows?|pumps?|leads?|routes?|delivers?|sends?|discharges?|pushes?|exits?|leaves?|connects?)(?:\\s+(?:to|into))|' +
+      'passes?\\s+(?:through|into|to)|' +
+      'is\\s+(?:connected|routed|piped|directed|sent|fed)\\s+to|' +
+      'connects?\\s+to';
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        // Allow up to 2 optional descriptor words between the flow verb and the target label
+        if (new RegExp('\\b' + ar + '\\s+(?:' + FLOW_VERBS + ')(?:\\s+\\w+){0,2}\\s+' + br + '\\b').test(lower)) {
+          addPair(nodes[i].id, nodes[j].id);
+        }
+      }
+    }
+
+    // Pattern 2b: inverse verbs
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        if (new RegExp('\\b' + ar + '\\s+(?:receives|takes)\\s+(?:[\\w]+\\s+){0,3}from\\s+' + OPT2 + br + '\\b').test(lower)) {
+          addPair(nodes[j].id, nodes[i].id);
+        }
+        if (new RegExp('\\b' + ar + '\\s+is\\s+fed\\s+(?:by|from)\\s+' + OPT2 + br + '\\b').test(lower)) {
+          addPair(nodes[j].id, nodes[i].id);
+        }
+        // "enters/goes to A from B" → B→A
+        const reEnters = new RegExp('\\b(?:enters?|goes\\s+(?:to|into)|is\\s+(?:fed|supplied)\\s+(?:to|into))\\s+(?:[\\w][\\w-]*\\s+){0,3}' + ar + '\\b[^.]*?\\bfrom\\s+(?:[\\w][\\w-]*\\s+){0,4}' + br + '\\b');
+        if (reEnters.test(lower)) addPair(nodes[j].id, nodes[i].id);
+      }
+    }
+
+    // Pattern 2c: "A [opt] to/through/then [opt] B"
+    // Captures middle text so pairs containing "back/recycle" can be excluded.
+    // Allows up to 4 optional words after the connector (e.g. "rich amine flash drum").
+    const BARE_CONN_CAP = '((?:\\s+\\w+){0,2}\\s+(?:to|through|into|toward|then)\\s+(?:\\w+\\s+){0,4})';
+    for (let i = 0; i < nodes.length; i++) {
+      const ar = escRe(nodes[i].label.toLowerCase());
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const br = escRe(nodes[j].label.toLowerCase());
+        const m2c = new RegExp('\\b' + ar + BARE_CONN_CAP + br + '\\b').exec(lower);
+        if (m2c && !/recycle|recircul|return(?:ed)?\s+to|\bback\b/i.test(m2c[1])) {
+          addPair(nodes[i].id, nodes[j].id);
+        }
+      }
+    }
+
+    if (pairs.length === 0) return [];
+
+    // Remove transitive edges (A→C when A→B→C exists) so fan-in is correct.
+    return _removeTransitiveEdges(pairs)
+      .map(p => ({ from: p.from, to: p.to, kind: 'stream' }));
+  }
+
+  // Build a YMPL doc from a structured-section parse result.
+  function _buildDocFromStructured(sourceText, structured) {
+    const { equipmentNodes, instrumentNodes, signalChains, proseText, equipmentText } = structured;
+
+    // Primary prose for edge building: text before Equipment:/Instruments: sections.
+    // When proseText is empty (Equipment: starts the input), fall back to the Equipment:
+    // section text itself — it often contains flow descriptions ("K-201 compresses from V-201").
+    const prose    = normalize(proseText || equipmentText || '');
+    const instrTagSet = new Set(instrumentNodes.map(n => n.tag));
+
+    // ── Equipment nodes ────────────────────────────────────────────────────────
+    // When Equipment: section is present, use it. Also scan prose for any tagged
+    // equipment (e.g. R-101) that appears in prose but NOT in Equipment: section.
+    // When Equipment: section is absent, extract entirely from prose.
+    let baseEquipNodes;
+    if (equipmentNodes.length > 0) {
+      baseEquipNodes = equipmentNodes.map(n => ({ label: n.tag, kind: n.kind }));
+      // Supplement with prose-only ISA-tagged equipment (e.g. R-101 mentioned in
+      // prose but not declared in Equipment: section). Only ISA-tag-format labels
+      // are added — descriptive terms (Pre-Heater, Cooler etc.) are excluded.
+      const knownTags     = new Set(equipmentNodes.map(n => n.tag));
+      const ISA_TAG_RE    = /^[A-Za-z]{1,5}-\d{2,4}[A-Za-z]?$/;
+      const proseExtracted = deduplicateNodes(extractNodes(prose));
+      for (const n of proseExtracted) {
+        if (ISA_TAG_RE.test(n.label) && !knownTags.has(n.label) && !instrTagSet.has(n.label)) {
+          baseEquipNodes.push({ label: n.label, kind: n.kind });
+        }
+      }
+    } else {
+      // No Equipment: section — extract from prose, exclude instrument tags
+      const proseExtracted = deduplicateNodes(extractNodes(prose));
+      baseEquipNodes = proseExtracted.filter(n => !instrTagSet.has(n.label));
+    }
+
+    // ── Instrument nodes ──────────────────────────────────────────────────────
+    // Keep instruments in INPUT ORDER (Instruments: list order is meaningful).
+    // Instruments referenced in signal chains appear in their input order.
+    const orderedInstr = instrumentNodes.map(n => ({ label: n.tag, kind: n.kind }));
+
+    // Assign sequential IDs: equipment first, then instruments.
+    const allNodes = [...baseEquipNodes, ...orderedInstr].map((n, idx) => ({
+      id: `n${idx + 1}`, label: n.label, kind: n.kind,
+    }));
+
+    const byLabel  = new Map(allNodes.map(n => [n.label, n]));
+    const eqNodes  = allNodes.filter(n => baseEquipNodes.some(e => e.label === n.label));
+
+    // ── Equipment stream / recycle / bypass edges ──────────────────────────────
+    // Try prose-directed pairs first (handles fan-in topology).
+    // Fall back to sequential edge building if prose yields no pairs.
+    const proseEdges = _extractProseEdges(eqNodes, prose);
+    let edges;
+    if (proseEdges.length > 0) {
+      edges = proseEdges;
+      // Also detect bypass / recycle from prose
+      const bypassRecycle = buildEdges(eqNodes, prose).filter(e =>
+        e.kind === 'bypass' || e.kind === 'recycle'
+      );
+      for (const e of bypassRecycle) {
+        if (!edges.some(x => x.from === e.from && x.to === e.to)) edges.push(e);
+      }
+    } else {
+      // Use reorderNodes to sort equipment into flow order, then sequential edges
+      const sortedEq  = reorderNodes(eqNodes, prose)
+        .map((n, idx) => ({ ...n, id: eqNodes.find(e => e.label === n.label)?.id || n.id }));
+      edges = buildEdges(sortedEq, prose);
+    }
+
+    // ── Instrument recycle detection ───────────────────────────────────────────
+    // "FCV-101 recycles from ... back to V-101" where FCV-101 is an instrument
+    const instrRecycleRe = /([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)\s+recycles?\s+(?:from\s+[^,.\n]*?)?\s*back\s+to\s+([A-Za-z]{1,5}-\d{2,4}[A-Za-z]?)/gi;
+    let irm;
+    while ((irm = instrRecycleRe.exec(sourceText)) !== null) {
+      const fromTag = irm[1].toUpperCase(), toTag = irm[2].toUpperCase();
+      const fromN   = byLabel.get(fromTag), toN = byLabel.get(toTag);
+      if (fromN && toN && !edges.some(e => e.from === fromN.id && e.to === toN.id)) {
+        edges.push({ from: fromN.id, to: toN.id, kind: 'recycle', label: 'Recycle' });
+      }
+    }
+
+    // ── Signal edges from chains ──────────────────────────────────────────────
+    // Apply description-first kind inference to determine edge semantics.
+    const instrKindMap = new Map(allNodes.map(n => [n.label, n.kind]));
+
+    for (const { sourceTag, controllerTag, finalTag, isCascade } of signalChains) {
+      const srcN  = byLabel.get(sourceTag);
+      const ctrlN = byLabel.get(controllerTag);
+      const finN  = byLabel.get(finalTag);
+
+      if (isCascade) {
+        // Cascade slave: "MASTER to THIS_CONTROLLER" → MASTER→THIS signal only
+        if (srcN && ctrlN && srcN.id !== ctrlN.id) {
+          edges.push({ from: srcN.id, to: ctrlN.id, kind: 'signal', label: 'Cascade' });
+        }
+      } else {
+        const srcKind = instrKindMap.get(sourceTag) || '';
+        if (srcKind !== 'element' && srcN && ctrlN) {
+          // Normal: source → controller
+          if (!edges.some(e => e.from === srcN.id && e.to === ctrlN.id)) {
+            edges.push({ from: srcN.id, to: ctrlN.id, kind: 'signal' });
+          }
+        }
+        // Controller/switch → final element (always emit when final is a valve)
+        if (ctrlN && finN && ctrlN.id !== finN.id) {
+          if (!edges.some(e => e.from === ctrlN.id && e.to === finN.id)) {
+            edges.push({ from: ctrlN.id, to: finN.id, kind: 'signal' });
+          }
+        }
+      }
+    }
+
+    // ── Sequential signal edges between consecutive instruments ───────────────
+    // Adds edges that aren't captured by explicit chains.
+    // Valid directions:
+    //   element    → transmitter          (sensing element → field transmitter)
+    //   transmitter/switch/analyzer → controller or valve or switch
+    //   controller → valve or controller
+    // Does NOT create transmitter→transmitter or other invalid-direction edges.
+    // Does NOT add an incoming edge to a valve that already has one from a chain.
+    const MEAS_KINDS = new Set(['transmitter','element','switch','analyzer','recorder','indicator']);
+    for (let i = 0; i < orderedInstr.length - 1; i++) {
+      const cur  = byLabel.get(orderedInstr[i].label);
+      const next = byLabel.get(orderedInstr[i + 1].label);
+      if (!cur || !next) continue;
+      const ck = orderedInstr[i].kind, nk = orderedInstr[i + 1].kind;
+      const validDir =
+        (ck === 'element' && nk === 'transmitter') ||
+        (MEAS_KINDS.has(ck) && ck !== 'element' && (nk === 'controller' || nk === 'valve' || nk === 'switch')) ||
+        (ck === 'controller' && (nk === 'valve' || nk === 'controller'));
+      if (!validDir) continue;
+      if (edges.some(e => e.from === cur.id && e.to === next.id)) continue;  // already present
+      // Don't add a second incoming signal edge to a final-element valve
+      if ((nk === 'valve' || nk === 'checkvalve') &&
+          edges.some(e => e.to === next.id && e.kind === 'signal')) continue;
+      edges.push({ from: cur.id, to: next.id, kind: 'signal' });
+    }
+
+    // Final signal classification for any remaining stream edges
+    edges = classifySignalEdges(allNodes, edges);
+
+    const confidence = allNodes.length >= 3 ? 'high'
+                     : allNodes.length === 2 ? 'medium'
+                     : allNodes.length === 1 ? 'low' : 'none';
+    const title = allNodes.length >= 2
+      ? `${allNodes[0].label} to ${allNodes[allNodes.length - 1].label}`
+      : allNodes.length === 1 ? allNodes[0].label : 'Unknown Process';
+
+    return {
+      schema_version: VERSION,
+      id:    slugify(title),
+      title,
+      nodes: allNodes,
+      edges,
+      meta: { confidence, source_text: sourceText },
+    };
+  }
+
   function parse(text) {
     const sourceText  = String(text || '').trim();
+
+    // ── Structured section mode ─────────────────────────────────────────────
+    // Equipment: / Instruments: sections with "- TAG: desc" entries → authoritative
+    // nodes. If structured parse returns 0 nodes (prose-style sections without the
+    // bullet-point format), fall through to the greedy scanner on the original text.
+    const structured = _parseStructuredSections(sourceText);
+    if (structured) {
+      const doc = _buildDocFromStructured(sourceText, structured);
+      if (doc.nodes.length > 0) return doc;
+      // Structured parse found keywords but no parseable items → greedy fallback
+    }
+
+    // ── Normal greedy text parse ────────────────────────────────────────────
     const normalized  = normalize(sourceText);
     let   nodes       = extractNodes(normalized);
 
@@ -922,7 +1613,23 @@
     // Reassign sequential IDs after reordering (n1 = first in flow, etc.)
     nodes = nodes.map((n, idx) => ({ id: 'n' + (idx + 1), label: n.label, kind: n.kind }));
 
-    const edges       = classifySignalEdges(nodes, buildEdges(nodes, normalized));
+    // Try prose-directed edges (handles fan-in and non-sequential topology).
+    // Use them when they cover most of the equipment span; otherwise fall back
+    // to sequential stream edges from buildEdges.
+    const proseEdges = _extractProseEdges(nodes, normalized);
+    let rawEdges;
+    if (proseEdges.length >= Math.max(1, nodes.length - 2)) {
+      rawEdges = proseEdges;
+      const bypassRecycle = buildEdges(nodes, normalized).filter(
+        e => e.kind === 'bypass' || e.kind === 'recycle'
+      );
+      for (const e of bypassRecycle) {
+        if (!rawEdges.some(x => x.from === e.from && x.to === e.to)) rawEdges.push(e);
+      }
+    } else {
+      rawEdges = buildEdges(nodes, normalized);
+    }
+    const edges = classifySignalEdges(nodes, rawEdges);
 
     const confidence  = nodes.length >= 3 ? 'high'
                       : nodes.length === 2 ? 'medium'
@@ -997,6 +1704,22 @@
 
   // ─── TO TEXT ───────────────────────────────────────────────────────────────
 
+  // Map first letter of ISA tag prefix → measured-variable word for loop naming.
+  const _LOOP_VAR = {
+    f: 'Flow', t: 'Temperature', l: 'Level', p: 'Pressure',
+    a: 'Analyser', q: 'Quality', d: 'Density', w: 'Weight', z: 'Position',
+  };
+
+  function _loopName(label) {
+    // Extract ISA prefix (letters before the first "-" or digit).
+    const m = label.match(/^([A-Za-z]+)/);
+    if (m) {
+      const first = m[1][0].toLowerCase();
+      if (_LOOP_VAR[first]) return _LOOP_VAR[first] + ' loop';
+    }
+    return 'Signal loop';
+  }
+
   function toText(doc) {
     const nodes = doc.nodes || [];
     const edges = doc.edges || [];
@@ -1005,13 +1728,10 @@
 
     const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
 
-    // Build main stream path
+    // ── 1. Main stream path ───────────────────────────────────────────────────
     const streamEdges    = edges.filter(e => !e.kind || e.kind === 'stream');
     const inDegree       = new Set(streamEdges.map(e => e.to));
     const start          = nodes.find(n => !inDegree.has(n.id)) || nodes[0];
-    // Nodes that are sources of recycle edges — they belong to the recycle branch,
-    // not the main flow. When a node has multiple outgoing stream edges, prefer the
-    // one whose target is NOT a recycle-branch source.
     const recycleSourceSet = new Set(edges.filter(e => e.kind === 'recycle').map(e => e.from));
     const edgeMap        = {};
     for (const e of streamEdges) {
@@ -1031,18 +1751,51 @@
       cur = next;
     }
 
-    let text = path.map(n => n.label).join(' → ') + '.';
+    const lines = [path.map(n => n.label).join(' → ') + '.'];
 
-    for (const e of edges.filter(e => e.kind === 'bypass')) {
-      const f = nodeById[e.from], t = nodeById[e.to];
-      if (f && t) text += ` Bypass from ${f.label} to ${t.label}.`;
-    }
+    // ── 2. Recycle edges ──────────────────────────────────────────────────────
     for (const e of edges.filter(e => e.kind === 'recycle')) {
       const f = nodeById[e.from], t = nodeById[e.to];
-      if (f && t) text += ` Recycle from ${f.label} back to ${t.label}.`;
+      if (f && t) lines[0] += ` Recycle from ${f.label} to ${t.label}.`;
     }
 
-    return text;
+    // ── 3. Bypass edges ───────────────────────────────────────────────────────
+    for (const e of edges.filter(e => e.kind === 'bypass')) {
+      const f = nodeById[e.from], t = nodeById[e.to];
+      if (f && t) lines[0] += ` Bypass from ${f.label} to ${t.label}.`;
+    }
+
+    // ── 4. Signal chains — one line per loop ─────────────────────────────────
+    const signalEdges = edges.filter(e => e.kind === 'signal');
+    if (signalEdges.length > 0) {
+      // Build adjacency and incoming-count within signal subgraph.
+      const sigNext = new Map();   // fromId → toId
+      const sigHasIn = new Set();  // nodeIds that have ≥1 incoming signal edge
+      for (const e of signalEdges) {
+        if (!sigNext.has(e.from)) sigNext.set(e.from, e.to);  // first outgoing only
+        sigHasIn.add(e.to);
+      }
+      // Chain heads: signal-source nodes with no incoming signal edge.
+      const sigNodes = new Set([...sigNext.keys(), ...sigHasIn]);
+      const heads    = [...sigNodes].filter(id => !sigHasIn.has(id));
+
+      for (const headId of heads) {
+        const chain  = [];
+        const walked = new Set();
+        let id = headId;
+        while (id && !walked.has(id)) {
+          walked.add(id);
+          const n = nodeById[id];
+          if (n) chain.push(n.label);
+          id = sigNext.get(id);
+        }
+        if (chain.length < 2) continue;
+        const loopLabel = _loopName(chain[0]);
+        lines.push(`${loopLabel}: ${chain.join(' → ')}.`);
+      }
+    }
+
+    return lines.join('\n');
   }
 
   function kindLabel(k) {
@@ -1062,6 +1815,7 @@
     pump:           { bg: '#fff', border: '#9333ea', text: '#3b0764' },
     compressor:     { bg: '#fff', border: '#d97706', text: '#78350f' },
     valve:          { bg: '#fff', border: '#dc2626', text: '#7f1d1d' },
+    relief:         { bg: '#fff', border: '#dc2626', text: '#7f1d1d' },
     vessel:         { bg: '#fff', border: '#2563eb', text: '#1e3a5f' },
     meter:          { bg: '#fff', border: '#475569', text: '#1e293b' },
     // ── ISA 5.1 Instrumentation ───────────────────────────────────────────────
@@ -1111,6 +1865,13 @@
 <polygon points="${cx},${cy} ${cx+hw},${cy-hh} ${cx+hw},${cy+hh}" fill="${stroke}" stroke="${stroke}" stroke-width="1.2"/>
 <line x1="${cx}" y1="${cy-hh}" x2="${cx}" y2="${cy-hh-7}" stroke="${stroke}" stroke-width="1.5"/>
 <circle cx="${cx}" cy="${cy-hh-13}" r="6" fill="#fff" stroke="${stroke}" stroke-width="1.5"/>`;
+      }
+
+      case 'relief': {
+        // PSV / relief valve: open triangle pointing up
+        const hw2 = 14, hh2 = 14;
+        return `<polygon points="${cx},${cy-hh2} ${cx-hw2},${cy+hh2} ${cx+hw2},${cy+hh2}" fill="none" stroke="${stroke}" stroke-width="1.8"/>
+<line x1="${cx}" y1="${cy-hh2}" x2="${cx}" y2="${cy-hh2-8}" stroke="${stroke}" stroke-width="1.5"/>`;
       }
 
       case 'vessel': {
@@ -1476,17 +2237,6 @@ ${nodeSvg}
           w.push(`isolated node: "${n.label}" has no connections`);
         }
       }
-    }
-
-    // ── Sparse parse — long input but few nodes ────────────────────────────
-    // More than ~12 words but fewer than 1 node per 6 words usually means
-    // some equipment terms were not recognised (typos, uncommon phrasing, etc.)
-    const wordCount = sourceText.trim().split(/\s+/).length;
-    if (nodes.length > 0 && wordCount > 12 && nodes.length < Math.ceil(wordCount / 6)) {
-      w.push(
-        `only ${nodes.length} equipment term${nodes.length !== 1 ? 's' : ''} recognised from ${wordCount}-word input` +
-        ` — some terms may be unrecognised. Try AI to capture missed equipment`
-      );
     }
 
     return w;

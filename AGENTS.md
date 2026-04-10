@@ -229,3 +229,4 @@ result.mermaid  // string — Mermaid flowchart LR
 result.text     // string — "P-101 → CV-101 → R-101."
 result.warnings // string[] — topology gap messages
 ```
+
